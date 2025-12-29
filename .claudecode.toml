@@ -1,0 +1,22 @@
+# .claudecode.toml - AImind 项目配置
+[core]
+workdir = "M:\\iCloudDrive\\Documents\\cursorAPP\\AImind"
+dont_ask_mode = true  # 核心修改：全局自动确认，不弹出提示
+
+[permissions]
+default = ["read", "write", "create", "delete", "edit"]
+allowed_paths = [
+  "M:\\iCloudDrive\\Documents\\cursorAPP\\AImind\\**"
+]
+denied_paths = []
+
+[security]
+strict_permissions = false
+auto_deny_unknown = false
+allow_file_creation = true
+allow_file_modification = true
+allow_file_deletion = true
+
+[file_operations]
+auto_approve = true
+confirm_before_delete = false

@@ -1,0 +1,41 @@
+{
+  "name": "aimind",
+  "version": "1.0.0",
+  "description": "AI-Powered Mind Mapping Tool",
+  "type": "module",
+  "scripts": {
+    "fix-filenames": "bash fix-filenames.sh",
+    "predev": "bash fix-filenames.sh",
+    "prebuild": "bash fix-filenames.sh",
+    "pretauri:dev": "bash fix-filenames.sh",
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview",
+    "tauri": "tauri",
+    "tauri:dev": "tauri dev",
+    "tauri:build": "tauri build"
+  },
+  "dependencies": {
+    "@tauri-apps/api": "^2.1.0",
+    "@tauri-apps/plugin-shell": "^2.0.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "reactflow": "^11.11.4",
+    "zustand": "^4.5.5",
+    "lucide-react": "^0.462.0",
+    "react-hotkeys-hook": "^4.6.1",
+    "html-to-image": "^1.11.11",
+    "jspdf": "^2.5.2"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2.1.0",
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "@vitejs/plugin-react": "^4.3.4",
+    "autoprefixer": "^10.4.20",
+    "postcss": "^8.4.49",
+    "tailwindcss": "^3.4.15",
+    "typescript": "^5.6.3",
+    "vite": "^6.0.1"
+  }
+}

@@ -1,0 +1,29 @@
+[package]
+name = "aimind"
+version = "1.0.0"
+description = "AI-Powered Mind Mapping Tool"
+authors = ["AImind"]
+edition = "2021"
+
+[lib]
+name = "aimind_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = ["devtools"] }
+tauri-plugin-shell = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tokio = { version = "1", features = ["full"] }
+reqwest = { version = "0.12", features = ["json"] }
+dirs = "5"
+
+[profile.release]
+opt-level = "z"     # 优化体积
+lto = true          # 链接时优化
+codegen-units = 1   # 单编译单元
+strip = true        # 移除符号表
+panic = "abort"     # 减少体积
