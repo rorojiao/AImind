@@ -1,135 +1,206 @@
 import type { MindMapNode } from '../../types';
 
-// 布局方向
 export type LayoutDirection = 'horizontal' | 'vertical' | 'free';
 
-// 自动布局配置
 export interface LayoutConfig {
   direction: LayoutDirection;
   nodeSpacing: { x: number; y: number };
   levelSpacing: number;
 }
 
-// 默认布局配置
 export const defaultLayoutConfig: LayoutConfig = {
   direction: 'horizontal',
-  nodeSpacing: { x: 150, y: 80 },
+  nodeSpacing: { x: 40, y: 50 },
   levelSpacing: 200,
 };
 
-// 计算节点布局
+// 子树尺寸信息
+interface SubtreeSize {
+  width: number;
+  height: number;
+}
+
 export function calculateLayout(root: MindMapNode, config: LayoutConfig = defaultLayoutConfig): void {
   if (config.direction === 'free') return;
 
-  // 重置所有节点位置
-  const positions = new Map<string, { x: number; y: number }>();
-
   if (config.direction === 'horizontal') {
-    calculateHorizontalLayout(root, 0, 0, positions, config);
+    // 第一步：后序遍历，计算每个子树的尺寸
+    const subtreeSizes = new Map<string, SubtreeSize>();
+    calcSubtreeSize(root, config, subtreeSizes);
+    // 第二步：前序遍历，设置节点位置
+    setNodePosition(root, 0, 0, config, subtreeSizes);
   } else {
-    calculateVerticalLayout(root, 0, 0, positions, config);
+    const subtreeSizes = new Map<string, SubtreeSize>();
+    calcSubtreeSizeVertical(root, config, subtreeSizes);
+    setNodePositionVertical(root, 0, 0, config, subtreeSizes);
   }
-
-  // 应用计算的位置
-  applyPositions(root, positions);
 }
 
-// 水平布局计算
-function calculateHorizontalLayout(
+// ==================== 水平布局 ====================
+
+// 计算子树尺寸（后序遍历）
+function calcSubtreeSize(
+  node: MindMapNode,
+  config: LayoutConfig,
+  sizes: Map<string, SubtreeSize>
+): SubtreeSize {
+  const nodeWidth = getNodeWidth(node);
+  const nodeHeight = getNodeHeight(node);
+
+  if (node.children.length === 0 || node.collapsed) {
+    const size = { width: nodeWidth, height: nodeHeight };
+    sizes.set(node.id, size);
+    return size;
+  }
+
+  // 递归计算子节点尺寸
+  const childSizes = node.children.map(child => calcSubtreeSize(child, config, sizes));
+
+  // 子树总高度 = 所有子节点高度 + 间距
+  const totalHeight = childSizes.reduce((sum, size) => sum + size.height, 0)
+    + (childSizes.length - 1) * config.nodeSpacing.y;
+
+  // 子树宽度 = 节点宽度 + 层级间距 + 最大子节点宽度
+  const maxChildWidth = Math.max(...childSizes.map(s => s.width));
+
+  const size: SubtreeSize = {
+    width: nodeWidth + config.levelSpacing + maxChildWidth,
+    height: Math.max(nodeHeight, totalHeight)
+  };
+
+  sizes.set(node.id, size);
+  return size;
+}
+
+// 设置节点位置（前序遍历）
+function setNodePosition(
   node: MindMapNode,
   x: number,
   y: number,
-  positions: Map<string, { x: number; y: number }>,
-  config: LayoutConfig
-): { height: number } {
-  positions.set(node.id, { x, y });
+  config: LayoutConfig,
+  sizes: Map<string, SubtreeSize>
+): void {
+  const subtreeSize = sizes.get(node.id)!;
 
-  if (node.children.length === 0 || node.collapsed) {
-    return { height: config.nodeSpacing.y };
-  }
+  // 设置当前节点位置
+  node.position = { x, y };
 
-  let currentY = y;
-  const childX = x + config.levelSpacing;
+  if (node.children.length === 0 || node.collapsed) return;
 
-  // 先计算所有子节点
-  const childHeights: number[] = [];
+  // 计算子节点的起始Y位置（使子节点区域相对于父节点居中）
+  const childSizes = node.children.map(child => sizes.get(child.id)!);
+  const totalChildHeight = childSizes.reduce((sum, s) => sum + s.height, 0)
+    + (childSizes.length - 1) * config.nodeSpacing.y;
+
+  // 子节点区域起点 = 当前节点Y + (子树高度 - 子节点区域高度) / 2
+  const childStartY = y + (subtreeSize.height - totalChildHeight) / 2;
+
+  // 设置子节点位置
+  const childX = x + getNodeWidth(node) + config.levelSpacing;
+  let currentY = childStartY;
+
   node.children.forEach((child) => {
-    const result = calculateHorizontalLayout(child, childX, currentY, positions, config);
-    childHeights.push(result.height);
-    currentY += result.height;
+    const childSize = sizes.get(child.id)!;
+    // 子节点在其空间内垂直居中
+    const centeredY = currentY + (childSize.height - getNodeHeight(child)) / 2;
+    child.position = { x: childX, y: centeredY };
+    // 递归设置子节点的子节点
+    setNodePosition(child, childX, centeredY, config, sizes);
+    currentY += childSize.height + config.nodeSpacing.y;
   });
-
-  // 计算子节点总高度
-  const totalHeight = childHeights.reduce((sum, h) => sum + h, 0);
-
-  // 调整父节点位置到子节点中心
-  const parentPos = positions.get(node.id)!;
-  parentPos.y = y + totalHeight / 2 - config.nodeSpacing.y / 2;
-
-  // 重新调整子节点位置使其居中
-  let childStartY = parentPos.y - totalHeight / 2;
-  node.children.forEach((child, i) => {
-    const childPos = positions.get(child.id)!;
-    childPos.y = childStartY;
-    childStartY += childHeights[i];
-  });
-
-  return { height: totalHeight };
 }
 
-// 垂直布局计算
-function calculateVerticalLayout(
+// ==================== 垂直布局 ====================
+
+function calcSubtreeSizeVertical(
+  node: MindMapNode,
+  config: LayoutConfig,
+  sizes: Map<string, SubtreeSize>
+): SubtreeSize {
+  const nodeWidth = getNodeWidth(node);
+  const nodeHeight = getNodeHeight(node);
+
+  if (node.children.length === 0 || node.collapsed) {
+    const size = { width: nodeWidth, height: nodeHeight };
+    sizes.set(node.id, size);
+    return size;
+  }
+
+  const childSizes = node.children.map(child => calcSubtreeSizeVertical(child, config, sizes));
+
+  const totalWidth = childSizes.reduce((sum, size) => sum + size.width, 0)
+    + (childSizes.length - 1) * config.nodeSpacing.x;
+
+  const maxChildHeight = Math.max(...childSizes.map(s => s.height));
+
+  const size: SubtreeSize = {
+    width: Math.max(nodeWidth, totalWidth),
+    height: nodeHeight + config.levelSpacing + maxChildHeight
+  };
+
+  sizes.set(node.id, size);
+  return size;
+}
+
+function setNodePositionVertical(
   node: MindMapNode,
   x: number,
   y: number,
-  positions: Map<string, { x: number; y: number }>,
-  config: LayoutConfig
-): { width: number } {
-  positions.set(node.id, { x, y });
+  config: LayoutConfig,
+  sizes: Map<string, SubtreeSize>
+): void {
+  const subtreeSize = sizes.get(node.id)!;
 
-  if (node.children.length === 0 || node.collapsed) {
-    return { width: config.nodeSpacing.x };
-  }
+  node.position = { x, y };
 
-  let currentX = x;
-  const childY = y + config.levelSpacing;
+  if (node.children.length === 0 || node.collapsed) return;
 
-  // 先计算所有子节点
-  const childWidths: number[] = [];
+  const childSizes = node.children.map(child => sizes.get(child.id)!);
+  const totalChildWidth = childSizes.reduce((sum, s) => sum + s.width, 0)
+    + (childSizes.length - 1) * config.nodeSpacing.x;
+
+  const childStartX = x + (subtreeSize.width - totalChildWidth) / 2;
+
+  const childY = y + getNodeHeight(node) + config.levelSpacing;
+  let currentX = childStartX;
+
   node.children.forEach((child) => {
-    const result = calculateVerticalLayout(child, currentX, childY, positions, config);
-    childWidths.push(result.width);
-    currentX += result.width;
+    const childSize = sizes.get(child.id)!;
+    const centeredX = currentX + (childSize.width - getNodeWidth(child)) / 2;
+    child.position = { x: centeredX, y: childY };
+    setNodePositionVertical(child, centeredX, childY, config, sizes);
+    currentX += childSize.width + config.nodeSpacing.x;
   });
-
-  // 计算子节点总宽度
-  const totalWidth = childWidths.reduce((sum, w) => sum + w, 0);
-
-  // 调整父节点位置到子节点中心
-  const parentPos = positions.get(node.id)!;
-  parentPos.x = x + totalWidth / 2 - config.nodeSpacing.x / 2;
-
-  // 重新调整子节点位置使其居中
-  let childStartX = parentPos.x - totalWidth / 2;
-  node.children.forEach((child, i) => {
-    const childPos = positions.get(child.id)!;
-    childPos.x = childStartX;
-    childStartX += childWidths[i];
-  });
-
-  return { width: totalWidth };
 }
 
-// 应用位置到节点
-function applyPositions(node: MindMapNode, positions: Map<string, { x: number; y: number }>): void {
-  const pos = positions.get(node.id);
-  if (pos) {
-    node.position = pos;
-  }
-  node.children.forEach((child) => applyPositions(child, positions));
+// ==================== 工具函数 ====================
+
+/**
+ * 计算节点的宽度（支持中英文混排）
+ * 中文字符宽度 = fontSize * 0.7
+ * 英文字符宽度 = fontSize * 0.4
+ * 最小宽度 120px
+ */
+export function getNodeWidth(node: MindMapNode): number {
+  const chineseChars = (node.content.match(/[\u4e00-\u9fa5]/g) || []).length;
+  const otherChars = node.content.length - chineseChars;
+  const textWidth = chineseChars * node.style.fontSize * 0.7 + otherChars * node.style.fontSize * 0.4;
+  const padding = 40;
+  return Math.max(120, textWidth + padding);
 }
 
-// 获取节点边界
+/**
+ * 计算节点的高度
+ * 基于字体大小和行高
+ * 最小高度 50px
+ */
+export function getNodeHeight(node: MindMapNode): number {
+  const fontSize = node.style.fontSize;
+  const lineHeight = fontSize * 1.5;
+  const padding = 24;
+  return Math.max(50, lineHeight + padding);
+}
+
 export function getNodeBounds(node: MindMapNode): { x: number; y: number; width: number; height: number } {
   return {
     x: node.position.x,
@@ -139,18 +210,6 @@ export function getNodeBounds(node: MindMapNode): { x: number; y: number; width:
   };
 }
 
-// 获取节点宽度
-function getNodeWidth(node: MindMapNode): number {
-  const baseWidth = node.content.length * node.style.fontSize * 0.6 + 40;
-  return Math.max(120, Math.min(300, baseWidth));
-}
-
-// 获取节点高度
-function getNodeHeight(node: MindMapNode): number {
-  return node.style.fontSize * 2 + 20;
-}
-
-// 计算所有节点的边界
 export function getMindmapBounds(root: MindMapNode): {
   minX: number;
   minY: number;

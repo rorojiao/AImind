@@ -1,16 +1,16 @@
 import React, { useState, useEffect } from 'react';
-import { useAIStore } from '../../stores/aiStore';
+import { useAIStore, type SearchLog } from '../../stores/aiStore';
 import { useMindMapStore } from '../../stores/mindmapStore';
 import { useAI } from '../../hooks/useAI';
 import { Button } from '../common/Button';
 import { Input } from '../common/Input';
-import { Sparkles, Loader2, Send } from 'lucide-react';
+import { Sparkles, Loader2, Send, Search, CheckCircle, XCircle, CircleSlash } from 'lucide-react';
 import { useAIAgent } from '../../hooks/useAIAgent';
 
 export const AIPanel: React.FC = () => {
-  const { currentProvider } = useAIStore();
+  const { currentProvider, searchLogs } = useAIStore();
   const { mindmap, selectedNodeId } = useMindMapStore();
-  const { isLoading, expandNode } = useAI();
+  const { isLoading, expandNode, isWebSearching } = useAI();
   const { isRunning, progress, runAgent } = useAIAgent();
   const [prompt, setPrompt] = useState('');
 
@@ -32,7 +32,11 @@ export const AIPanel: React.FC = () => {
     if (!node) return;
 
     try {
-      const newNodes = await expandNode(node.content);
+      // 传递完整上下文
+      const newNodes = await expandNode(node.content, {
+        root: mindmap.root,
+        nodeId: selectedNodeId,
+      });
       useMindMapStore.getState().addAINodes(selectedNodeId, newNodes, currentProvider?.id || '');
     } catch (error) {
       console.error('Expand error:', error);
@@ -122,12 +126,35 @@ export const AIPanel: React.FC = () => {
             {isLoading ? (
               <>
                 <Loader2 className="w-4 h-4 animate-spin" />
-                生成中...
+                {isWebSearching ? '搜索中...' : '生成中...'}
               </>
             ) : (
               'AI 扩展子节点'
             )}
           </Button>
+        </div>
+      )}
+
+      {/* 搜索日志 */}
+      {searchLogs.length > 0 && (
+        <div className="p-3 border-b border-gray-200 dark:border-gray-700 max-h-48 overflow-y-auto">
+          <div className="flex items-center justify-between mb-2">
+            <h4 className="text-xs font-medium text-gray-600 dark:text-gray-400 flex items-center gap-1">
+              <Search className="w-3 h-3" />
+              搜索日志
+            </h4>
+            <button
+              onClick={() => useAIStore.getState().clearSearchLogs()}
+              className="text-xs text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"
+            >
+              清空
+            </button>
+          </div>
+          <div className="space-y-2">
+            {searchLogs.slice(0, 5).map((log) => (
+              <SearchLogItem key={log.id} log={log} />
+            ))}
+          </div>
         </div>
       )}
 
@@ -174,4 +201,50 @@ function findNode(
     if (found) return found;
   }
   return null;
+}
+
+// 搜索日志项组件
+function SearchLogItem({ log }: { log: SearchLog }) {
+  const getStatusIcon = () => {
+    switch (log.status) {
+      case 'searching':
+        return <Loader2 className="w-3 h-3 animate-spin text-blue-500" />;
+      case 'success':
+        return <CheckCircle className="w-3 h-3 text-green-500" />;
+      case 'failed':
+        return <XCircle className="w-3 h-3 text-red-500" />;
+      case 'skipped':
+        return <CircleSlash className="w-3 h-3 text-gray-400" />;
+    }
+  };
+
+  const getStatusText = () => {
+    switch (log.status) {
+      case 'searching':
+        return 'text-blue-600 dark:text-blue-400';
+      case 'success':
+        return 'text-green-600 dark:text-green-400';
+      case 'failed':
+        return 'text-red-600 dark:text-red-400';
+      case 'skipped':
+        return 'text-gray-500 dark:text-gray-400';
+    }
+  };
+
+  return (
+    <div className="text-xs p-2 rounded bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700">
+      <div className="flex items-start gap-2">
+        <div className="mt-0.5">{getStatusIcon()}</div>
+        <div className="flex-1 min-w-0">
+          <p className={`font-medium ${getStatusText()} truncate`}>
+            {log.query}
+          </p>
+          <p className="text-gray-500 dark:text-gray-400 mt-0.5">
+            {log.message}
+            {log.resultCount !== undefined && ` (${log.resultCount}条)`}
+          </p>
+        </div>
+      </div>
+    </div>
+  );
 }

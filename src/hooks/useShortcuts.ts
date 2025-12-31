@@ -17,8 +17,26 @@ function findNode(node: import('../types').MindMapNode, id: string): import('../
 }
 
 export function useShortcuts() {
-  const { mindmap, selectedNodeId, addNode, addSiblingNode, deleteNode, toggleCollapse, loadMindmap, copyNode, pasteNode, addAINodes } =
-    useMindMapStore();
+  const {
+    mindmap,
+    selectedNodeId,
+    selectedNodeIds,
+    addNode,
+    addSiblingNode,
+    deleteNode,
+    deleteSelectedNodes,
+    toggleCollapse,
+    loadMindmap,
+    copyNode,
+    pasteNode,
+    addAINodes,
+    toggleNodeSelection,
+    clearSelection,
+    selectAllNodes,
+    updateSelectedNodesStyle,
+    collapseSelectedNodes,
+    expandSelectedNodes,
+  } = useMindMapStore();
   const { ui, setUI, togglePanel, appConfig, setAppConfig } = useConfigStore();
   const { undo, redo, canUndo, canRedo } = useHistoryStore();
   const { expandNode, isLoading } = useAI();
@@ -139,17 +157,66 @@ export function useShortcuts() {
         return;
       }
 
-      // Delete/Backspace: 删除节点
+      // Delete/Backspace: 删除节点（支持批量删除）
       if ((e.key === 'Delete' || e.key === 'Backspace') && selectedNodeId) {
         e.preventDefault();
-        deleteNode(selectedNodeId);
+        // 如果多选了节点，使用批量删除
+        if (selectedNodeIds.length > 1) {
+          deleteSelectedNodes();
+        } else {
+          deleteNode(selectedNodeId);
+        }
         return;
       }
 
-      // /: 折叠/展开
+      // /: 折叠/展开（单个节点）
       if (e.key === '/' && selectedNodeId) {
         e.preventDefault();
-        toggleCollapse(selectedNodeId);
+        // 如果多选了节点，批量折叠/展开
+        if (selectedNodeIds.length > 1) {
+          // 判断第一个选中节点的状态，如果折叠则展开，展开则折叠
+          const { mindmap } = useMindMapStore.getState();
+          if (mindmap) {
+            const firstSelectedId = selectedNodeIds[0];
+            const findNode = (node: import('../types').MindMapNode, id: string): import('../types').MindMapNode | null => {
+              if (node.id === id) return node;
+              for (const child of node.children) {
+                const found = findNode(child, id);
+                if (found) return found;
+              }
+              return null;
+            };
+            const firstNode = findNode(mindmap.root, firstSelectedId);
+            if (firstNode?.collapsed) {
+              expandSelectedNodes();
+            } else {
+              collapseSelectedNodes();
+            }
+          }
+        } else {
+          toggleCollapse(selectedNodeId);
+        }
+        return;
+      }
+
+      // Ctrl/Cmd + B: 粗体（批量）
+      if ((e.ctrlKey || e.metaKey) && e.key === 'b' && selectedNodeIds.length > 0) {
+        e.preventDefault();
+        updateSelectedNodesStyle({ fontWeight: 700 });
+        return;
+      }
+
+      // Ctrl/Cmd + I: 斜体（批量）
+      if ((e.ctrlKey || e.metaKey) && e.key === 'i' && selectedNodeIds.length > 0) {
+        e.preventDefault();
+        updateSelectedNodesStyle({ fontStyle: 'italic' });
+        return;
+      }
+
+      // Ctrl/Cmd + U: 下划线（批量）
+      if ((e.ctrlKey || e.metaKey) && e.key === 'u' && selectedNodeIds.length > 0) {
+        e.preventDefault();
+        updateSelectedNodesStyle({ textDecoration: 'underline' });
         return;
       }
 
@@ -159,7 +226,10 @@ export function useShortcuts() {
         if (selectedNodeId && mindmap && !isLoading) {
           const node = findNode(mindmap.root, selectedNodeId);
           if (node) {
-            expandNode(node.content).then((newNodes) => {
+            expandNode(node.content, {
+              root: mindmap.root,
+              nodeId: selectedNodeId,
+            }).then((newNodes) => {
               addAINodes(selectedNodeId, newNodes, currentProvider?.id || '');
             }).catch(console.error);
           }
@@ -211,9 +281,16 @@ export function useShortcuts() {
         return;
       }
 
-      // Escape: 取消选择
+      // Ctrl/Cmd + A: 全选节点
+      if ((e.ctrlKey || e.metaKey) && e.key === 'a') {
+        e.preventDefault();
+        selectAllNodes();
+        return;
+      }
+
+      // Escape: 取消选择（清空多选）
       if (e.key === 'Escape') {
-        useMindMapStore.getState().selectNode(null);
+        clearSelection();
         return;
       }
     };
@@ -222,15 +299,20 @@ export function useShortcuts() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [
     selectedNodeId,
+    selectedNodeIds,
     mindmap,
     addNode,
     addSiblingNode,
     deleteNode,
+    deleteSelectedNodes,
     toggleCollapse,
     loadMindmap,
     copyNode,
     pasteNode,
     addAINodes,
+    toggleNodeSelection,
+    clearSelection,
+    selectAllNodes,
     setUI,
     togglePanel,
     ui,

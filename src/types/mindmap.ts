@@ -40,9 +40,33 @@ export interface MindMapData {
   root: MindMapNode;
   layout: 'horizontal' | 'vertical' | 'free';
   theme: string;
+  edgeStyle: 'curve' | 'straight' | 'orthogonal';
   aiContext?: AIContext;
   created: number;
   modified: number;
+}
+
+// 连接线样式配置
+export interface EdgeStyleConfig {
+  type: 'curve' | 'straight' | 'orthogonal';
+  color: string;
+  width: number;
+}
+
+// 主题配置
+export interface MindMapTheme {
+  id: string;
+  name: string;
+  preview: string;
+  colors: {
+    root: { bg: string; border: string; text: string };
+    branch: { bg: string; border: string; text: string };
+    leaf: { bg: string; border: string; text: string };
+  };
+  edge: {
+    color: string;
+    width: number;
+  };
 }
 
 export interface AIContext {

@@ -187,6 +187,7 @@ export async function createServerFile(title: string): Promise<MindMapData> {
     },
     layout: 'horizontal',
     theme: 'ai-blue',
+    edgeStyle: 'curve',
     created: now,
     modified: now,
   };

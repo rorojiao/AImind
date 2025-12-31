@@ -13,6 +13,8 @@ export const AIProviderSelector: React.FC = () => {
   const [isOpen, setIsOpen] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [editingProvider, setEditingProvider] = useState<import('../../types').AIProvider | null>(null);
+  const [editingNameId, setEditingNameId] = useState<string | null>(null);
+  const [editingNameValue, setEditingNameValue] = useState('');
 
   const handleAddProvider = () => {
     const newProvider: import('../../types').AIProvider = {
@@ -30,7 +32,20 @@ export const AIProviderSelector: React.FC = () => {
     setShowSettings(true);
   };
 
+  // 保存正在编辑的标题
+  const saveEditingName = () => {
+    if (editingNameId && editingNameValue) {
+      const provider = config.providers.find((p) => p.id === editingNameId);
+      if (provider && editingNameValue !== provider.name) {
+        updateProvider(editingNameId, { name: editingNameValue });
+      }
+      setEditingNameId(null);
+    }
+  };
+
   const handleSaveProvider = () => {
+    // 先保存正在编辑的标题
+    saveEditingName();
     if (editingProvider) {
       updateProvider(editingProvider.id, editingProvider);
       setEditingProvider(null);
@@ -101,7 +116,15 @@ export const AIProviderSelector: React.FC = () => {
       </div>
 
       {/* 配置管理对话框 */}
-      <Modal isOpen={showSettings} onClose={() => setShowSettings(false)} title="AI 服务配置" size="lg">
+      <Modal
+        isOpen={showSettings}
+        onClose={() => {
+          saveEditingName();
+          setShowSettings(false);
+        }}
+        title="AI 服务配置"
+        size="lg"
+      >
         <div className="space-y-4">
           {config.providers.map((provider) => (
             <div
@@ -118,20 +141,45 @@ export const AIProviderSelector: React.FC = () => {
                     }
                     className="w-4 h-4"
                   />
-                  <Input
-                    value={provider.name}
-                    onChange={(e) =>
-                      setEditingProvider({ ...provider, name: e.target.value })
-                    }
-                    onBlur={() => updateProvider(provider.id, { name: editingProvider?.name || provider.name })}
-                    className="w-auto"
-                  />
+                  {editingNameId === provider.id ? (
+                    <Input
+                      value={editingNameValue}
+                      onChange={(e) => setEditingNameValue(e.target.value)}
+                      onBlur={() => {
+                        updateProvider(provider.id, { name: editingNameValue || provider.name });
+                        setEditingNameId(null);
+                      }}
+                      onFocus={(e) => e.target.select()}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          updateProvider(provider.id, { name: editingNameValue || provider.name });
+                          setEditingNameId(null);
+                        } else if (e.key === 'Escape') {
+                          setEditingNameId(null);
+                        }
+                      }}
+                      className="w-auto"
+                      autoFocus
+                    />
+                  ) : (
+                    <button
+                      onClick={() => {
+                        setEditingNameId(provider.id);
+                        setEditingNameValue(provider.name);
+                      }}
+                      className="px-2 py-1 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded transition-colors"
+                    >
+                      {provider.name}
+                    </button>
+                  )}
                 </div>
                 <div className="flex items-center gap-2">
                   <Button
                     size="sm"
                     variant="ghost"
                     onClick={() => {
+                      // 先保存正在编辑的标题
+                      saveEditingName();
                       setCurrentProvider(provider.id);
                       setEditingProvider(provider);
                     }}
@@ -141,7 +189,10 @@ export const AIProviderSelector: React.FC = () => {
                   <Button
                     size="sm"
                     variant="ghost"
-                    onClick={() => handleDeleteProvider(provider.id)}
+                    onClick={() => {
+                      saveEditingName();
+                      handleDeleteProvider(provider.id);
+                    }}
                   >
                     <Trash2 className="w-4 h-4 text-red-500" />
                   </Button>
@@ -216,7 +267,10 @@ export const AIProviderSelector: React.FC = () => {
                       保存
                     </Button>
                     <Button
-                      onClick={() => setEditingProvider(null)}
+                      onClick={() => {
+                        saveEditingName();
+                        setEditingProvider(null);
+                      }}
                       size="sm"
                       variant="secondary"
                     >

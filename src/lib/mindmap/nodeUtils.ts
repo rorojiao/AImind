@@ -1,21 +1,5 @@
 import type { MindMapNode } from '../../types';
-
-/**
- * 计算节点的宽度
- * 基于内容长度和字体大小，最小120px，最大300px
- */
-export function getNodeWidth(node: MindMapNode): number {
-  const baseWidth = node.content.length * node.style.fontSize * 0.6 + 40;
-  return Math.max(120, Math.min(300, baseWidth));
-}
-
-/**
- * 计算节点的高度
- * 基于字体大小
- */
-export function getNodeHeight(node: MindMapNode): number {
-  return node.style.fontSize * 2 + 20;
-}
+import { getNodeWidth, getNodeHeight } from './layout';
 
 /**
  * 获取节点的右边缘X坐标
@@ -47,3 +31,6 @@ export function getNodeCenter(node: MindMapNode): { x: number; y: number } {
     y: node.position.y + getNodeHeight(node) / 2,
   };
 }
+
+// 重新导出节点尺寸计算函数
+export { getNodeWidth, getNodeHeight };

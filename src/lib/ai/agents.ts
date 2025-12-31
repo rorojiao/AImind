@@ -207,6 +207,7 @@ export function createInitialMindmap(title: string): MindMapData {
     },
     layout: 'horizontal',
     theme: 'ai-blue',
+    edgeStyle: 'curve',
     created: now,
     modified: now,
   };

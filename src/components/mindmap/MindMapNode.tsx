@@ -1,6 +1,6 @@
 import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { useMindMapStore } from '../../stores/mindmapStore';
-import { ChevronRight, ChevronDown, Sparkles, Plus, Type } from 'lucide-react';
+import { ChevronRight, ChevronDown, Sparkles, Plus, Type, Check } from 'lucide-react';
 import { NodeEditor } from './NodeEditor';
 import { useNodeContextMenu, ContextMenu } from '../common/ContextMenu';
 import { getNodeWidth, getNodeHeight } from '../../lib/mindmap/nodeUtils';
@@ -13,8 +13,13 @@ interface MindMapNodeProps {
 let dragNodeId: string | null = null;
 
 export const MindMapNode: React.FC<MindMapNodeProps> = ({ node }) => {
-  const { selectedNodeId, selectNode, updateNode, toggleCollapse, addNode, moveNode } = useMindMapStore();
+
+  const { selectedNodeId, selectedNodeIds, selectNode, toggleNodeSelection, updateNode, toggleCollapse, addNode, moveNode } = useMindMapStore();
   const isSelected = selectedNodeId === node.id;
+  const isMultiSelected = selectedNodeIds.includes(node.id);
+
+  // 使用 useRef 保持编辑状态，防止组件重新渲染时状态丢失
+  const isEditingRef = useRef(false);
   const [isEditing, setIsEditing] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const [isDragOver, setIsDragOver] = useState(false);
@@ -25,14 +30,21 @@ export const MindMapNode: React.FC<MindMapNodeProps> = ({ node }) => {
 
   // 进入编辑模式
   const startEditing = useCallback(() => {
+    isEditingRef.current = true;
     setIsEditing(true);
+  }, []);
+
+  // 退出编辑模式
+  const stopEditing = useCallback(() => {
+    isEditingRef.current = false;
+    setIsEditing(false);
   }, []);
 
   // 监听编辑事件（从快捷键触发）
   useEffect(() => {
     const handleEditEvent = (e: Event) => {
       const customEvent = e as CustomEvent<{ nodeId: string }>;
-      if (customEvent.detail.nodeId === node.id) {
+      if (customEvent.detail.nodeId === node.id && !isEditingRef.current) {
         startEditing();
       }
     };
@@ -48,29 +60,40 @@ export const MindMapNode: React.FC<MindMapNodeProps> = ({ node }) => {
     if (newContent.trim() !== '' && newContent !== node.content) {
       updateNode(node.id, { content: newContent.trim() });
     }
-    setIsEditing(false);
-  }, [node.content, node.id, updateNode]);
+    stopEditing();
+  }, [node.content, node.id, updateNode, stopEditing]);
 
   // 取消编辑
   const handleCancelEdit = useCallback(() => {
-    setIsEditing(false);
-  }, []);
+    stopEditing();
+  }, [stopEditing]);
 
   // 双击编辑
   const handleDoubleClick = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
     e.stopPropagation();
-    startEditing();
+    if (!isEditingRef.current) {
+      startEditing();
+    }
   }, [startEditing]);
 
-  // 单击选择
+  // 单击选择（支持Ctrl+点击多选）
   const handleClick = useCallback((e: React.MouseEvent) => {
-    if (isEditing) {
+    // 如果正在编辑，不处理点击
+    if (isEditingRef.current) {
       e.stopPropagation();
       return;
     }
     e.stopPropagation();
-    selectNode(node.id);
-  }, [isEditing, selectNode]);
+
+    // Ctrl/Cmd + 点击：切换多选状态
+    if (e.ctrlKey || e.metaKey) {
+      toggleNodeSelection(node.id);
+    } else {
+      // 普通点击：选中节点
+      selectNode(node.id);
+    }
+  }, [selectNode, toggleNodeSelection, node.id]);
 
   const handleCollapseClick = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -93,6 +116,10 @@ export const MindMapNode: React.FC<MindMapNodeProps> = ({ node }) => {
 
   // 拖拽开始
   const handleDragStart = useCallback((e: React.DragEvent) => {
+    if (isEditingRef.current) {
+      e.preventDefault();
+      return;
+    }
     dragNodeId = node.id;
     setIsDragging(true);
     e.dataTransfer.effectAllowed = 'move';
@@ -189,9 +216,11 @@ export const MindMapNode: React.FC<MindMapNodeProps> = ({ node }) => {
       {/* 节点 */}
       <div
         ref={nodeRef}
-        draggable
+        draggable={!isEditing}
         className={`absolute rounded-lg cursor-pointer transition-all duration-200 ${
-          isSelected
+          isMultiSelected
+            ? 'ring-2 ring-purple-500 ring-offset-2'
+            : isSelected
             ? 'ring-2 ring-blue-500 ring-offset-2'
             : isDragOver
             ? 'ring-2 ring-green-500 ring-offset-2 ring-opacity-75'
@@ -236,6 +265,13 @@ export const MindMapNode: React.FC<MindMapNodeProps> = ({ node }) => {
             <Sparkles className="w-3 h-3 ml-1 text-blue-400 flex-shrink-0" />
           )}
         </div>
+
+        {/* 多选标记（右上角小圆点） */}
+        {isMultiSelected && (
+          <div className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-purple-500 border-2 border-white dark:border-gray-800 flex items-center justify-center z-20">
+            <Check className="w-2.5 h-2.5 text-white" strokeWidth={3} />
+          </div>
+        )}
 
         {/* 快速添加子节点按钮（悬停时显示） */}
         <button

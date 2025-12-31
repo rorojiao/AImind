@@ -1,0 +1,14 @@
+#!/usr/bin/env sh
+. "$(dirname -- "$0")/_/husky.sh"
+
+echo "🔍 运行提交前检查..."
+
+# TypeScript 类型检查
+echo "▶️  TypeScript 类型检查..."
+npm run type-check
+if [ $? -ne 0 ]; then
+  echo "❌ TypeScript 类型检查失败，请修复错误后再提交"
+  exit 1
+fi
+
+echo "✅ 所有检查通过，可以提交"

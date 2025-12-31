@@ -15,7 +15,7 @@ export const MindMapCanvas: React.FC = () => {
   const [offset, setOffset] = useState({ x: 0, y: 0 });
 
   const { mindmap, selectNode } = useMindMapStore();
-  const { ui } = useConfigStore();
+  const { ui, setZoom } = useConfigStore();
 
   // 处理画布拖拽
   const handleMouseDown = (e: React.MouseEvent) => {
@@ -53,7 +53,7 @@ export const MindMapCanvas: React.FC = () => {
     if (e.ctrlKey || e.metaKey) {
       e.preventDefault();
       const delta = e.deltaY > 0 ? -0.1 : 0.1;
-      useConfigStore.getState().setZoom(ui.zoom + delta);
+      setZoom(ui.zoom + delta);
     }
   };
 
@@ -101,7 +101,7 @@ export const MindMapCanvas: React.FC = () => {
             height: bounds.height + 200,
           }}
         >
-          {renderEdges(mindmap.root, bounds.minX - 100, bounds.minY - 100)}
+          {renderEdges(mindmap.root, bounds.minX - 100, bounds.minY - 100, mindmap.edgeStyle || 'curve')}
         </svg>
 
         {/* 节点 */}
@@ -133,7 +133,8 @@ function renderNodes(node: import('../../types').MindMapNode): React.ReactNode {
 function renderEdges(
   node: import('../../types').MindMapNode,
   svgOffsetX: number,
-  svgOffsetY: number
+  svgOffsetY: number,
+  edgeStyle: 'curve' | 'straight' | 'orthogonal' = 'curve'
 ): React.ReactNode {
   const edges: React.ReactNode[] = [];
 
@@ -150,13 +151,30 @@ function renderEdges(
     const svgEndX = endX - svgOffsetX;
     const svgEndY = endY - svgOffsetY;
 
-    // 贝塞尔曲线控制点
-    const midX = (svgStartX + svgEndX) / 2;
+    let pathD = '';
+
+    switch (edgeStyle) {
+      case 'straight':
+        // 直线
+        pathD = `M ${svgStartX} ${svgStartY} L ${svgEndX} ${svgEndY}`;
+        break;
+      case 'orthogonal':
+        // 折线 (水平-垂直-水平)
+        const midX = (svgStartX + svgEndX) / 2;
+        pathD = `M ${svgStartX} ${svgStartY} L ${midX} ${svgStartY} L ${midX} ${svgEndY} L ${svgEndX} ${svgEndY}`;
+        break;
+      case 'curve':
+      default:
+        // 贝塞尔曲线
+        const midXCurve = (svgStartX + svgEndX) / 2;
+        pathD = `M ${svgStartX} ${svgStartY} C ${midXCurve} ${svgStartY}, ${midXCurve} ${svgEndY}, ${svgEndX} ${svgEndY}`;
+        break;
+    }
 
     return (
       <path
         key={`${node.id}-${child.id}`}
-        d={`M ${svgStartX} ${svgStartY} C ${midX} ${svgStartY}, ${midX} ${svgEndY}, ${svgEndX} ${svgEndY}`}
+        d={pathD}
         fill="none"
         stroke="#9ca3af"
         strokeWidth="2"
@@ -168,7 +186,7 @@ function renderEdges(
   if (!node.collapsed) {
     node.children.forEach((child) => {
       edges.push(renderEdge(child));
-      edges.push(...(renderEdges(child, svgOffsetX, svgOffsetY) as React.ReactNode[]));
+      edges.push(...(renderEdges(child, svgOffsetX, svgOffsetY, edgeStyle) as React.ReactNode[]));
     });
   }
 

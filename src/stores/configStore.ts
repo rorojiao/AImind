@@ -14,7 +14,7 @@ interface ConfigState {
 const defaultAppConfig: AppConfig = {
   theme: 'ai-blue',
   autoSave: true,
-  autoSaveInterval: 30000,
+  autoSaveInterval: 2000, // 改为2秒，确保修改后快速保存
   defaultLayout: 'horizontal',
   recentFiles: [],
   maxRecentFiles: 10,

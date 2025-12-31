@@ -2,15 +2,49 @@ import { useAIStore } from '../stores/aiStore';
 import {
   getInitialAnalysisPrompt,
   getBranchExpandPrompt,
-  getSmartExpandPrompt,
   getOverallAnalysisPrompt,
+  getContextAwareExpandPrompt,
 } from '../lib/ai/prompts';
 import { extractJSON, parseNodeArray, parseAgentAnalysis, parseOverallAnalysis } from '../lib/ai/formatters';
-import type { AIMessage } from '../types';
+import type { AIMessage, MindMapNode } from '../types';
+import { useWebSearch } from './useWebSearch';
+
+// 辅助函数：获取节点路径和深度
+function getNodePath(node: MindMapNode, targetId: string, currentPath: string[] = []): string[] | null {
+  if (node.id === targetId) {
+    return [...currentPath, node.content];
+  }
+  for (const child of node.children) {
+    const result = getNodePath(child, targetId, [...currentPath, node.content]);
+    if (result) return result;
+  }
+  return null;
+}
+
+function getNodeDepth(node: MindMapNode, targetId: string, currentDepth: number = 0): number | null {
+  if (node.id === targetId) {
+    return currentDepth;
+  }
+  for (const child of node.children) {
+    const result = getNodeDepth(child, targetId, currentDepth + 1);
+    if (result !== null) return result;
+  }
+  return null;
+}
+
+function findNodeById(node: MindMapNode, targetId: string): MindMapNode | null {
+  if (node.id === targetId) return node;
+  for (const child of node.children) {
+    const result = findNodeById(child, targetId);
+    if (result) return result;
+  }
+  return null;
+}
 
 // AI调用Hook
 export function useAI() {
   const { currentProvider, setLoading, setError, addMessage, messages } = useAIStore();
+  const { search, isSearching: isWebSearching } = useWebSearch();
 
   // 调用AI API
   const callAI = async (prompt: string, systemPrompt?: string): Promise<string> => {
@@ -100,9 +134,80 @@ export function useAI() {
     }
   };
 
-  // 智能扩展节点
-  const expandNode = async (content: string): Promise<string[]> => {
-    const prompt = getSmartExpandPrompt(content);
+  // 智能扩展节点（上下文感知版本 + 搜索增强）
+  const expandNode = async (
+    content: string,
+    context?: {
+      root: MindMapNode;
+      nodeId: string;
+    }
+  ): Promise<string[]> => {
+    // 如果提供了上下文，使用上下文感知提示词
+    if (context) {
+      const { root, nodeId } = context;
+
+      const path = getNodePath(root, nodeId);
+      const depth = getNodeDepth(root, nodeId);
+      const node = findNodeById(root, nodeId);
+
+      if (!path || depth === null || !node) {
+        // 降级：直接返回内容分割
+        return [content];
+      }
+
+      // 获取父节点内容
+      const parentContent = path.length > 2 ? path[path.length - 2] : null;
+
+      // 智能搜索 - 无感知获取网络信息
+      let searchContext: string | undefined = undefined;
+      try {
+        const searchResult = await search(content, {
+          parentContent,
+          rootTopic: root.content,
+          depth,
+        });
+        if (searchResult) {
+          searchContext = searchResult;
+        }
+      } catch (error) {
+        // 搜索失败不影响主流程，静默处理
+        console.debug('搜索跳过或失败:', error);
+      }
+
+      // 获取已有子节点
+      const existingChildren = node.children.map((c) => c.content);
+
+      // 使用上下文感知提示词（包含搜索结果）
+      const prompt = getContextAwareExpandPrompt({
+        rootTopic: root.content,
+        nodePath: path,
+        currentContent: content,
+        existingChildren: existingChildren.length > 0 ? existingChildren : undefined,
+        depth,
+        siblingCount: undefined,
+        searchContext, // 传入搜索结果
+      });
+
+      const response = await callAI(prompt);
+
+      // 尝试解析JSON
+      const jsonStr = extractJSON(response);
+      if (jsonStr) {
+        const parsed = parseNodeArray(jsonStr);
+        if (parsed) return parsed;
+      }
+
+      // 如果解析失败，返回原始内容按行分割
+      return response.split('\n').filter((line) => line.trim());
+    }
+
+    // 没有上下文时的简化提示词
+    const prompt = `你是一个思维导图助手。请为节点"${content}"生成4-6个有价值的子节点。
+要求：
+1. 简洁明了，每个子节点不超过10个字
+2. 逻辑清晰，覆盖主要方面
+3. 用JSON数组格式返回：["子节点1", "子节点2", ...]`;
+
     const response = await callAI(prompt);
 
     // 尝试解析JSON
@@ -179,10 +284,11 @@ export function useAI() {
   };
 
   return {
-    isLoading: useAIStore((s) => s.isLoading),
+    isLoading: useAIStore((s) => s.isLoading) || isWebSearching,
     error: useAIStore((s) => s.error),
     messages,
     currentProvider,
+    isWebSearching,
 
     callAI,
     expandNode,

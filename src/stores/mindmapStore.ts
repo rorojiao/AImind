@@ -38,6 +38,7 @@ function createInitialMindmap(title: string): MindMapData {
     },
     layout: 'horizontal',
     theme: 'ai-blue',
+    edgeStyle: 'curve',
     created: now,
     modified: now,
   };
@@ -46,7 +47,8 @@ function createInitialMindmap(title: string): MindMapData {
 interface MindMapState {
   // 数据
   mindmap: MindMapData | null;
-  selectedNodeId: string | null;
+  selectedNodeId: string | null; // 保留向后兼容
+  selectedNodeIds: string[]; // 多选
   clipboard: MindMapNode | null;
 
   // 操作
@@ -59,7 +61,11 @@ interface MindMapState {
   addSiblingNode: (nodeId: string, content: string) => void;
   updateNode: (nodeId: string, updates: Partial<MindMapNode>) => void;
   deleteNode: (nodeId: string) => void;
+  deleteSelectedNodes: () => void;
   selectNode: (nodeId: string | null) => void;
+  toggleNodeSelection: (nodeId: string) => void; // 切换选中状态
+  clearSelection: () => void;
+  selectAllNodes: () => void;
   toggleCollapse: (nodeId: string) => void;
 
   // AI生成节点
@@ -67,6 +73,9 @@ interface MindMapState {
 
   // 布局
   applyLayout: () => void;
+  setLayout: (layout: 'horizontal' | 'vertical' | 'free') => void;
+  setEdgeStyle: (edgeStyle: 'curve' | 'straight' | 'orthogonal') => void;
+  setTheme: (theme: string) => void;
 
   // 复制粘贴
   copyNode: (nodeId: string) => void;
@@ -74,23 +83,29 @@ interface MindMapState {
 
   // 节点拖拽
   moveNode: (nodeId: string, newParentId: string, position?: number) => void;
+
+  // 批量操作
+  updateSelectedNodesStyle: (updates: Partial<MindMapNode['style']>) => void;
+  collapseSelectedNodes: () => void;
+  expandSelectedNodes: () => void;
 }
 
 export const useMindMapStore = create<MindMapState>((set, get) => ({
   // 初始状态
   mindmap: null,
   selectedNodeId: null,
+  selectedNodeIds: [],
   clipboard: null,
 
   // 创建新思维导图
   createMindmap: (title: string) => {
     const mindmap = createInitialMindmap(title);
-    set({ mindmap, selectedNodeId: mindmap.root.id });
+    set({ mindmap, selectedNodeId: mindmap.root.id, selectedNodeIds: [] });
   },
 
   // 加载思维导图
   loadMindmap: (data: MindMapData) => {
-    set({ mindmap: deepClone(data), selectedNodeId: data.root.id });
+    set({ mindmap: deepClone(data), selectedNodeId: data.root.id, selectedNodeIds: [] });
   },
 
   // 更新思维导图
@@ -146,7 +161,10 @@ export const useMindMapStore = create<MindMapState>((set, get) => ({
 
     addToParent(mindmap.root);
     get().applyLayout();
-    set({ mindmap: { ...mindmap, modified: Date.now() }, selectedNodeId: newNode.id });
+    // 使用深拷贝确保状态更新被正确检测
+    const updatedMindmap = deepClone(mindmap);
+    updatedMindmap.modified = Date.now();
+    set({ mindmap: updatedMindmap, selectedNodeId: newNode.id });
   },
 
   // 添加兄弟节点
@@ -214,12 +232,15 @@ export const useMindMapStore = create<MindMapState>((set, get) => ({
 
     deleteFromTree(mindmap.root);
     get().applyLayout();
-    set({ mindmap: { ...mindmap, modified: Date.now() }, selectedNodeId: null });
+    // 使用深拷贝确保状态更新被正确检测
+    const updatedMindmap = deepClone(mindmap);
+    updatedMindmap.modified = Date.now();
+    set({ mindmap: updatedMindmap, selectedNodeId: null });
   },
 
-  // 选择节点
+  // 选择节点（单选会清空多选状态）
   selectNode: (nodeId: string | null) => {
-    set({ selectedNodeId: nodeId });
+    set({ selectedNodeId: nodeId, selectedNodeIds: [] });
   },
 
   // 切换折叠
@@ -240,7 +261,10 @@ export const useMindMapStore = create<MindMapState>((set, get) => ({
 
     toggleInTree(mindmap.root);
     get().applyLayout();
-    set({ mindmap: { ...mindmap, modified: Date.now() } });
+    // 使用深拷贝确保状态更新被正确检测
+    const updatedMindmap = deepClone(mindmap);
+    updatedMindmap.modified = Date.now();
+    set({ mindmap: updatedMindmap });
   },
 
   // AI生成节点
@@ -295,7 +319,10 @@ export const useMindMapStore = create<MindMapState>((set, get) => ({
     });
 
     get().applyLayout();
-    set({ mindmap: { ...mindmap, modified: Date.now() } });
+    // 使用深拷贝确保状态更新被正确检测
+    const updatedMindmap = deepClone(mindmap);
+    updatedMindmap.modified = Date.now();
+    set({ mindmap: updatedMindmap });
   },
 
   // 应用布局
@@ -309,6 +336,31 @@ export const useMindMapStore = create<MindMapState>((set, get) => ({
     };
     calculateLayout(mindmap.root, config);
     set({ mindmap: { ...mindmap, modified: Date.now() } });
+  },
+
+  // 设置布局方向
+  setLayout: (layout: 'horizontal' | 'vertical' | 'free') => {
+    const { mindmap } = get();
+    if (!mindmap) return;
+
+    get().updateMindmap({ layout });
+    get().applyLayout();
+  },
+
+  // 设置连接线样式
+  setEdgeStyle: (edgeStyle: 'curve' | 'straight' | 'orthogonal') => {
+    const { mindmap } = get();
+    if (!mindmap) return;
+
+    get().updateMindmap({ edgeStyle });
+  },
+
+  // 设置主题
+  setTheme: (theme: string) => {
+    const { mindmap } = get();
+    if (!mindmap) return;
+
+    get().updateMindmap({ theme });
   },
 
   // 复制节点
@@ -363,7 +415,10 @@ export const useMindMapStore = create<MindMapState>((set, get) => ({
 
     addToParent(mindmap.root);
     get().applyLayout();
-    set({ mindmap: { ...mindmap, modified: Date.now() }, selectedNodeId: newNode.id });
+    // 使用深拷贝确保状态更新被正确检测
+    const updatedMindmap = deepClone(mindmap);
+    updatedMindmap.modified = Date.now();
+    set({ mindmap: updatedMindmap, selectedNodeId: newNode.id });
   },
 
   // 移动节点
@@ -425,6 +480,173 @@ export const useMindMapStore = create<MindMapState>((set, get) => ({
     }
 
     get().applyLayout();
-    set({ mindmap: { ...mindmap, modified: Date.now() } });
+    // 使用深拷贝确保状态更新被正确检测
+    const updatedMindmap = deepClone(mindmap);
+    updatedMindmap.modified = Date.now();
+    set({ mindmap: updatedMindmap });
+  },
+
+  // 切换节点选中状态（多选）
+  toggleNodeSelection: (nodeId: string) => {
+    const { mindmap, selectedNodeIds } = get();
+    if (!mindmap || nodeId === mindmap.root.id) {
+      // 根节点只能单独选中
+      set({ selectedNodeId: nodeId, selectedNodeIds: [] });
+      return;
+    }
+
+    const isSelected = selectedNodeIds.includes(nodeId);
+    if (isSelected) {
+      // 取消选中
+      const newSelected = selectedNodeIds.filter((id) => id !== nodeId);
+      set({
+        selectedNodeIds: newSelected,
+        selectedNodeId: newSelected.length > 0 ? newSelected[0] : null,
+      });
+    } else {
+      // 添加选中
+      const newSelected = [...selectedNodeIds, nodeId];
+      set({
+        selectedNodeIds: newSelected,
+        selectedNodeId: nodeId,
+      });
+    }
+  },
+
+  // 清空选择
+  clearSelection: () => {
+    set({ selectedNodeIds: [], selectedNodeId: null });
+  },
+
+  // 全选（除了根节点）
+  selectAllNodes: () => {
+    const { mindmap } = get();
+    if (!mindmap) return;
+
+    const allIds: string[] = [];
+    const collectIds = (node: MindMapNode) => {
+      if (node.id !== mindmap.root.id) {
+        allIds.push(node.id);
+      }
+      node.children.forEach(collectIds);
+    };
+
+    collectIds(mindmap.root);
+    set({ selectedNodeIds: allIds, selectedNodeId: allIds[0] || null });
+  },
+
+  // 批量删除选中节点
+  deleteSelectedNodes: () => {
+    const { mindmap, selectedNodeIds } = get();
+    if (!mindmap || selectedNodeIds.length === 0) return;
+
+    // 需要从后往前删除，避免索引问题
+    const sortedIds = [...selectedNodeIds].reverse();
+
+    sortedIds.forEach((nodeId) => {
+      const deleteFromTree = (node: MindMapNode): boolean => {
+        const index = node.children.findIndex((c) => c.id === nodeId);
+        if (index !== -1) {
+          node.children.splice(index, 1);
+          node.type = node.children.length > 0 ? 'branch' : 'leaf';
+          return true;
+        }
+        for (const child of node.children) {
+          if (deleteFromTree(child)) return true;
+        }
+        return false;
+      };
+
+      deleteFromTree(mindmap.root);
+    });
+
+    get().applyLayout();
+    // 使用深拷贝确保状态更新被正确检测
+    const updatedMindmap = deepClone(mindmap);
+    updatedMindmap.modified = Date.now();
+    set({ mindmap: updatedMindmap, selectedNodeIds: [], selectedNodeId: null });
+  },
+
+  // 批量更新选中节点样式
+  updateSelectedNodesStyle: (updates) => {
+    const { mindmap, selectedNodeIds } = get();
+    if (!mindmap || selectedNodeIds.length === 0) return;
+
+    selectedNodeIds.forEach((nodeId) => {
+      const updateInTree = (node: MindMapNode): boolean => {
+        if (node.id === nodeId) {
+          if (node.style) {
+            Object.assign(node.style, updates);
+          }
+          node.metadata.modified = Date.now();
+          return true;
+        }
+        for (const child of node.children) {
+          if (updateInTree(child)) return true;
+        }
+        return false;
+      };
+
+      updateInTree(mindmap.root);
+    });
+
+    // 使用深拷贝确保状态更新被正确检测
+    const updatedMindmap = deepClone(mindmap);
+    updatedMindmap.modified = Date.now();
+    set({ mindmap: updatedMindmap });
+  },
+
+  // 批量折叠选中节点
+  collapseSelectedNodes: () => {
+    const { mindmap, selectedNodeIds } = get();
+    if (!mindmap || selectedNodeIds.length === 0) return;
+
+    selectedNodeIds.forEach((nodeId) => {
+      const collapseInTree = (node: MindMapNode): boolean => {
+        if (node.id === nodeId) {
+          node.collapsed = true;
+          return true;
+        }
+        for (const child of node.children) {
+          if (collapseInTree(child)) return true;
+        }
+        return false;
+      };
+
+      collapseInTree(mindmap.root);
+    });
+
+    get().applyLayout();
+    // 使用深拷贝确保状态更新被正确检测
+    const updatedMindmap = deepClone(mindmap);
+    updatedMindmap.modified = Date.now();
+    set({ mindmap: updatedMindmap });
+  },
+
+  // 批量展开选中节点
+  expandSelectedNodes: () => {
+    const { mindmap, selectedNodeIds } = get();
+    if (!mindmap || selectedNodeIds.length === 0) return;
+
+    selectedNodeIds.forEach((nodeId) => {
+      const expandInTree = (node: MindMapNode): boolean => {
+        if (node.id === nodeId) {
+          node.collapsed = false;
+          return true;
+        }
+        for (const child of node.children) {
+          if (expandInTree(child)) return true;
+        }
+        return false;
+      };
+
+      expandInTree(mindmap.root);
+    });
+
+    get().applyLayout();
+    // 使用深拷贝确保状态更新被正确检测
+    const updatedMindmap = deepClone(mindmap);
+    updatedMindmap.modified = Date.now();
+    set({ mindmap: updatedMindmap });
   },
 }));

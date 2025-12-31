@@ -15,11 +15,18 @@ const shortcuts: ShortcutItem[] = [
   { keys: ['Shift + Tab'], description: '添加父级兄弟节点', category: '基础操作' },
   { keys: ['Delete', 'Backspace'], description: '删除节点', category: '基础操作' },
 
+  // 多选操作
+  { keys: ['Ctrl + Click', 'Cmd + Click'], description: '切换节点多选', category: '多选操作' },
+  { keys: ['Ctrl + A', 'Cmd + A'], description: '全选节点', category: '多选操作' },
+  { keys: ['Escape'], description: '取消多选 / 退出编辑', category: '多选操作' },
+
   // 编辑操作
-  { keys: ['Escape'], description: '取消选择 / 退出编辑', category: '编辑操作' },
   { keys: ['Ctrl + C', 'Cmd + C'], description: '复制节点', category: '编辑操作' },
   { keys: ['Ctrl + V', 'Cmd + V'], description: '粘贴节点', category: '编辑操作' },
   { keys: ['Ctrl + X', 'Cmd + X'], description: '剪切节点', category: '编辑操作' },
+  { keys: ['Ctrl + B', 'Cmd + B'], description: '粗体（批量）', category: '编辑操作' },
+  { keys: ['Ctrl + I', 'Cmd + I'], description: '斜体（批量）', category: '编辑操作' },
+  { keys: ['Ctrl + U', 'Cmd + U'], description: '下划线（批量）', category: '编辑操作' },
 
   // 历史操作
   { keys: ['Ctrl + Z', 'Cmd + Z'], description: '撤销', category: '历史操作' },

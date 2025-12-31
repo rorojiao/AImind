@@ -2,6 +2,16 @@ import { create } from 'zustand';
 import type { AIConfig, AIProvider, AIAgentConfig, AIMessage } from '../types';
 import { loadAIConfig, saveAIConfig } from '../lib/storage/localStorage';
 
+// 搜索日志类型
+export interface SearchLog {
+  id: string;
+  query: string;
+  status: 'searching' | 'success' | 'failed' | 'skipped';
+  resultCount?: number;
+  message?: string;
+  timestamp: number;
+}
+
 interface AIState {
   // 配置
   config: AIConfig;
@@ -14,6 +24,9 @@ interface AIState {
 
   // Agent配置
   agentConfig: AIAgentConfig;
+
+  // 搜索日志
+  searchLogs: SearchLog[];
 
   // 加载状态
   isLoading: boolean;
@@ -32,6 +45,11 @@ interface AIState {
   // 聊天
   addMessage: (message: AIMessage) => void;
   clearMessages: () => void;
+
+  // 搜索日志
+  addSearchLog: (log: Omit<SearchLog, 'id' | 'timestamp'>) => void;
+  updateSearchLog: (id: string, updates: Partial<SearchLog>) => void;
+  clearSearchLogs: () => void;
 
   // 状态
   setLoading: (loading: boolean) => void;
@@ -106,6 +124,7 @@ export const useAIStore = create<AIState>((set, get) => ({
   })(),
   messages: [],
   agentConfig: defaultAgentConfig,
+  searchLogs: [],
   isLoading: false,
   error: null,
 
@@ -199,6 +218,32 @@ export const useAIStore = create<AIState>((set, get) => ({
   // 清空消息
   clearMessages: () => {
     set({ messages: [] });
+  },
+
+  // 添加搜索日志
+  addSearchLog: (log) => {
+    const newLog: SearchLog = {
+      ...log,
+      id: `search-${Date.now()}`,
+      timestamp: Date.now(),
+    };
+    set((state) => ({
+      searchLogs: [newLog, ...state.searchLogs].slice(0, 10), // 只保留最近10条
+    }));
+  },
+
+  // 更新搜索日志
+  updateSearchLog: (id, updates) => {
+    set((state) => ({
+      searchLogs: state.searchLogs.map((log) =>
+        log.id === id ? { ...log, ...updates } : log
+      ),
+    }));
+  },
+
+  // 清空搜索日志
+  clearSearchLogs: () => {
+    set({ searchLogs: [] });
   },
 
   // 设置加载状态

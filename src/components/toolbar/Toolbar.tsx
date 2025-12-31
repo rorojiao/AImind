@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useMindMapStore } from '../../stores/mindmapStore';
 import { useConfigStore } from '../../stores/configStore';
+import { useHistoryStore } from '../../stores/historyStore';
 import { Button } from '../common/Button';
 import { AIProviderSelector } from '../ai/AIProviderSelector';
 import { RecentFiles } from '../common/RecentFiles';
@@ -16,6 +17,7 @@ import {
   ZoomIn,
   ZoomOut,
   RotateCcw,
+  RotateCw,
   Plus,
   Minus,
   Clock,
@@ -23,15 +25,18 @@ import {
   Download,
   HelpCircle,
   History,
+  Palette,
 } from 'lucide-react';
 
 interface ToolbarProps {
   onShowShortcuts?: () => void;
+  onShowStyleSettings?: () => void;
 }
 
-export const Toolbar: React.FC<ToolbarProps> = ({ onShowShortcuts }) => {
+export const Toolbar: React.FC<ToolbarProps> = ({ onShowShortcuts, onShowStyleSettings }) => {
   const { mindmap, createMindmap, loadMindmap } = useMindMapStore();
   const { ui, setUI, appConfig, setAppConfig } = useConfigStore();
+  const { undo, redo, canUndo, canRedo } = useHistoryStore();
   const [showRecentFiles, setShowRecentFiles] = useState(false);
   const [showServerFiles, setShowServerFiles] = useState(false);
   const [showVersionHistory, setShowVersionHistory] = useState(false);
@@ -159,6 +164,24 @@ export const Toolbar: React.FC<ToolbarProps> = ({ onShowShortcuts }) => {
     setUI({ zoom: 1 });
   };
 
+  const handleUndo = () => {
+    if (!canUndo()) return;
+    undo();
+    const { present } = useHistoryStore.getState();
+    if (present) {
+      useMindMapStore.getState().loadMindmap(present);
+    }
+  };
+
+  const handleRedo = () => {
+    if (!canRedo()) return;
+    redo();
+    const { present } = useHistoryStore.getState();
+    if (present) {
+      useMindMapStore.getState().loadMindmap(present);
+    }
+  };
+
   return (
     <div className="h-14 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 flex items-center px-4 gap-4">
       {/* Logo */}
@@ -233,15 +256,63 @@ export const Toolbar: React.FC<ToolbarProps> = ({ onShowShortcuts }) => {
 
       {/* 节点操作 */}
       <div className="flex items-center gap-2">
-        <Button size="sm" variant="ghost" title="新建节点 (Tab)" disabled={!mindmap}>
+        <Button
+          size="sm"
+          variant="ghost"
+          title="新建子节点 (Tab)"
+          disabled={!mindmap}
+          onClick={() => {
+            const { selectedNodeId, addNode } = useMindMapStore.getState();
+            if (selectedNodeId) {
+              addNode(selectedNodeId, '新节点');
+            }
+          }}
+        >
           <Plus className="w-4 h-4" />
         </Button>
-        <Button size="sm" variant="ghost" title="删除节点 (Delete)" disabled={!mindmap}>
+        <Button
+          size="sm"
+          variant="ghost"
+          title="删除选中节点 (Delete)"
+          disabled={!mindmap}
+          onClick={() => {
+            const { selectedNodeId, selectedNodeIds, deleteNode, deleteSelectedNodes } = useMindMapStore.getState();
+            if (selectedNodeIds.length > 1) {
+              deleteSelectedNodes();
+            } else if (selectedNodeId) {
+              deleteNode(selectedNodeId);
+            }
+          }}
+        >
           <Minus className="w-4 h-4" />
         </Button>
       </div>
 
       <div className="flex-1" />
+
+      {/* 撤销/重做 */}
+      <div className="flex items-center gap-2">
+        <Button
+          size="sm"
+          variant="ghost"
+          onClick={handleUndo}
+          title="撤销 (Ctrl+Z)"
+          disabled={!canUndo()}
+        >
+          <RotateCcw className="w-4 h-4" />
+        </Button>
+        <Button
+          size="sm"
+          variant="ghost"
+          onClick={handleRedo}
+          title="重做 (Ctrl+Y 或 Ctrl+Shift+Z)"
+          disabled={!canRedo()}
+        >
+          <RotateCw className="w-4 h-4" />
+        </Button>
+      </div>
+
+      <div className="h-6 w-px bg-gray-200 dark:bg-gray-700" />
 
       {/* 缩放控制 */}
       <div className="flex items-center gap-2">
@@ -263,6 +334,19 @@ export const Toolbar: React.FC<ToolbarProps> = ({ onShowShortcuts }) => {
 
       {/* AI服务选择 */}
       <AIProviderSelector />
+
+      <div className="h-6 w-px bg-gray-200 dark:bg-gray-700" />
+
+      {/* 样式设置 */}
+      <Button
+        size="sm"
+        variant="ghost"
+        onClick={onShowStyleSettings}
+        title="样式设置"
+        disabled={!mindmap}
+      >
+        <Palette className="w-4 h-4" />
+      </Button>
 
       <div className="h-6 w-px bg-gray-200 dark:border-gray-700" />
 
