@@ -118,6 +118,16 @@ interface MindMapState {
   // 任务
   setNodeTask: (nodeId: string, task: import('../types').NodeTask) => void;
   removeNodeTask: (nodeId: string) => void;
+
+  // 边界
+  addBoundary: (boundary: Omit<import('../types').NodeBoundary, 'id'>) => void;
+  removeBoundary: (boundaryId: string) => void;
+  updateBoundary: (boundaryId: string, updates: Partial<import('../types').NodeBoundary>) => void;
+
+  // 关系线
+  addRelationship: (relationship: Omit<import('../types').NodeRelationship, 'id'>) => void;
+  removeRelationship: (relationshipId: string) => void;
+  updateRelationship: (relationshipId: string, updates: Partial<import('../types').NodeRelationship>) => void;
 }
 
 export const useMindMapStore = create<MindMapState>((set, get) => ({
@@ -970,5 +980,85 @@ export const useMindMapStore = create<MindMapState>((set, get) => ({
 
     updateInTree(mindmap.root);
     set({ mindmap: { ...mindmap, modified: Date.now() } });
+  },
+
+  // ==================== 边界管理 ====================
+
+  // 添加边界
+  addBoundary: (boundary: Omit<import('../types').NodeBoundary, 'id'>) => {
+    const { mindmap } = get();
+    if (!mindmap) return;
+
+    const newBoundary = {
+      id: generateId(),
+      ...boundary,
+    };
+
+    if (!mindmap.boundaries) {
+      mindmap.boundaries = [];
+    }
+    mindmap.boundaries.push(newBoundary);
+    set({ mindmap: { ...mindmap, modified: Date.now() } });
+  },
+
+  // 移除边界
+  removeBoundary: (boundaryId: string) => {
+    const { mindmap } = get();
+    if (!mindmap || !mindmap.boundaries) return;
+
+    mindmap.boundaries = mindmap.boundaries.filter((b) => b.id !== boundaryId);
+    set({ mindmap: { ...mindmap, modified: Date.now() } });
+  },
+
+  // 更新边界
+  updateBoundary: (boundaryId: string, updates: Partial<import('../types').NodeBoundary>) => {
+    const { mindmap } = get();
+    if (!mindmap || !mindmap.boundaries) return;
+
+    const boundary = mindmap.boundaries.find((b) => b.id === boundaryId);
+    if (boundary) {
+      Object.assign(boundary, updates);
+      set({ mindmap: { ...mindmap, modified: Date.now() } });
+    }
+  },
+
+  // ==================== 关系线管理 ====================
+
+  // 添加关系线
+  addRelationship: (relationship: Omit<import('../types').NodeRelationship, 'id'>) => {
+    const { mindmap } = get();
+    if (!mindmap) return;
+
+    const newRelationship = {
+      id: generateId(),
+      ...relationship,
+    };
+
+    if (!mindmap.relationships) {
+      mindmap.relationships = [];
+    }
+    mindmap.relationships.push(newRelationship);
+    set({ mindmap: { ...mindmap, modified: Date.now() } });
+  },
+
+  // 移除关系线
+  removeRelationship: (relationshipId: string) => {
+    const { mindmap } = get();
+    if (!mindmap || !mindmap.relationships) return;
+
+    mindmap.relationships = mindmap.relationships.filter((r) => r.id !== relationshipId);
+    set({ mindmap: { ...mindmap, modified: Date.now() } });
+  },
+
+  // 更新关系线
+  updateRelationship: (relationshipId: string, updates: Partial<import('../types').NodeRelationship>) => {
+    const { mindmap } = get();
+    if (!mindmap || !mindmap.relationships) return;
+
+    const relationship = mindmap.relationships.find((r) => r.id === relationshipId);
+    if (relationship) {
+      Object.assign(relationship, updates);
+      set({ mindmap: { ...mindmap, modified: Date.now() } });
+    }
   },
 }));

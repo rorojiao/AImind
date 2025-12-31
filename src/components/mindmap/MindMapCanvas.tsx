@@ -2,6 +2,8 @@ import React, { useRef, useEffect, useState } from 'react';
 import { useMindMapStore } from '../../stores/mindmapStore';
 import { useConfigStore } from '../../stores/configStore';
 import { MindMapNode } from './MindMapNode';
+import { BoundaryRenderer } from './BoundaryRenderer';
+import { RelationshipRenderer } from './RelationshipRenderer';
 import { getMindmapBounds } from '../../lib/mindmap/layout';
 import {
   getNodeRightEdge,
@@ -103,6 +105,12 @@ export const MindMapCanvas: React.FC = () => {
         >
           {renderEdges(mindmap.root, bounds.minX - 100, bounds.minY - 100, mindmap.edgeStyle || 'curve')}
         </svg>
+
+        {/* 边界渲染 */}
+        <BoundaryRenderer mindmapId={mindmap.id} />
+
+        {/* 关系线渲染 */}
+        <RelationshipRenderer mindmapId={mindmap.id} />
 
         {/* 节点 */}
         {renderNodes(mindmap.root)}

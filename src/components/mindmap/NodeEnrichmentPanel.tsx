@@ -1,8 +1,17 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
-import { X, Link, Tag, Plus, Trash2, Flag, FileText } from 'lucide-react';
+import { X, Link, Tag, Plus, Trash2, Flag, FileText, Image as ImageIcon, Paperclip, Upload } from 'lucide-react';
 import { useMindMapStore } from '../../stores/mindmapStore';
 import type { MindMapNode } from '../../types';
 import { getNodeWidth } from '../../lib/mindmap/nodeUtils';
+
+// 文件大小格式化函数
+function formatFileSize(bytes: number): string {
+  if (bytes === 0) return '0 B';
+  const k = 1024;
+  const sizes = ['B', 'KB', 'MB', 'GB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return Math.round((bytes / Math.pow(k, i)) * 100) / 100 + ' ' + sizes[i];
+}
 
 interface NodeEnrichmentPanelProps {
   node: MindMapNode;
@@ -12,9 +21,23 @@ interface NodeEnrichmentPanelProps {
 type TabType = 'hyperlink' | 'labels' | 'markers' | 'notes' | 'images' | 'attachments';
 
 export const NodeEnrichmentPanel: React.FC<NodeEnrichmentPanelProps> = ({ node, onClose }) => {
-  const { setNodeHyperlink, addNodeLabel, removeNodeLabel, addNodeMarker, removeNodeMarker, setNodeNotes, removeNodeNotes } = useMindMapStore();
+  const {
+    setNodeHyperlink,
+    addNodeLabel,
+    removeNodeLabel,
+    addNodeMarker,
+    removeNodeMarker,
+    setNodeNotes,
+    removeNodeNotes,
+    addNodeImage,
+    removeNodeImage,
+    addNodeAttachment,
+    removeNodeAttachment
+  } = useMindMapStore();
   const [activeTab, setActiveTab] = useState<TabType>('hyperlink');
   const panelRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const attachmentInputRef = useRef<HTMLInputElement>(null);
 
   // 超链接状态
   const [hyperlinkType, setHyperlinkType] = useState<'url' | 'email' | 'topic' | 'file'>(
@@ -106,11 +129,58 @@ export const NodeEnrichmentPanel: React.FC<NodeEnrichmentPanelProps> = ({ node, 
     onClose();
   }, [node.id, notesContent, notesFormat, setNodeNotes, removeNodeNotes, onClose]);
 
+  // 上传图片
+  const handleImageUpload = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const base64 = event.target?.result as string;
+      const img = new Image();
+      img.onload = () => {
+        addNodeImage(node.id, {
+          url: base64,
+          width: img.width,
+          height: img.height,
+          alignment: 'center',
+          size: 'medium',
+        });
+      };
+      img.src = base64;
+    };
+    reader.readAsDataURL(file);
+    // 重置文件输入
+    e.target.value = '';
+  }, [node.id, addNodeImage]);
+
+  // 上传附件
+  const handleAttachmentUpload = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const base64 = event.target?.result as string;
+      addNodeAttachment(node.id, {
+        name: file.name,
+        url: base64,
+        size: file.size,
+        mimeType: file.type,
+      });
+    };
+    reader.readAsDataURL(file);
+    // 重置文件输入
+    e.target.value = '';
+  }, [node.id, addNodeAttachment]);
+
   const tabs: { key: TabType; icon: React.ReactNode; label: string }[] = [
     { key: 'hyperlink', icon: <Link className="w-4 h-4" />, label: '超链接' },
     { key: 'labels', icon: <Tag className="w-4 h-4" />, label: '标签' },
     { key: 'markers', icon: <Flag className="w-4 h-4" />, label: '图标' },
     { key: 'notes', icon: <FileText className="w-4 h-4" />, label: '注释' },
+    { key: 'images', icon: <ImageIcon className="w-4 h-4" />, label: '图片' },
+    { key: 'attachments', icon: <Paperclip className="w-4 h-4" />, label: '附件' },
   ];
 
   const nodeWidth = getNodeWidth(node);
@@ -459,6 +529,142 @@ export const NodeEnrichmentPanel: React.FC<NodeEnrichmentPanelProps> = ({ node, 
               >
                 保存
               </button>
+            </div>
+          </div>
+        )}
+
+        {/* 图片面板 */}
+        {activeTab === 'images' && (
+          <div className="space-y-4">
+            {/* 现有图片 */}
+            {node.images && node.images.length > 0 && (
+              <div className="space-y-2">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                  现有图片
+                </label>
+                <div className="space-y-2">
+                  {node.images.map((image) => (
+                    <div
+                      key={image.id}
+                      className="relative group border border-gray-300 dark:border-gray-600 rounded-lg p-2"
+                    >
+                      <img
+                        src={image.url}
+                        alt="节点图片"
+                        className="w-full h-auto rounded"
+                        style={{ maxHeight: '200px', objectFit: 'contain' }}
+                      />
+                      <button
+                        onClick={() => removeNodeImage(node.id, image.id)}
+                        className="absolute top-1 right-1 p-1 bg-red-500 hover:bg-red-600 text-white rounded opacity-0 group-hover:opacity-100 transition-opacity"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                      <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                        {image.width} × {image.height}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* 上传新图片 */}
+            <div className="space-y-2">
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                上传图片
+              </label>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                onChange={handleImageUpload}
+                className="hidden"
+              />
+              <button
+                onClick={() => fileInputRef.current?.click()}
+                className="w-full px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg transition-colors flex items-center justify-center gap-2"
+              >
+                <Upload className="w-4 h-4" />
+                选择图片
+              </button>
+              <p className="text-xs text-gray-500 dark:text-gray-400">
+                支持 JPG、PNG、GIF 等常见图片格式
+              </p>
+            </div>
+          </div>
+        )}
+
+        {/* 附件面板 */}
+        {activeTab === 'attachments' && (
+          <div className="space-y-4">
+            {/* 现有附件 */}
+            {node.attachments && node.attachments.length > 0 && (
+              <div className="space-y-2">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                  现有附件
+                </label>
+                <div className="space-y-2">
+                  {node.attachments.map((attachment) => (
+                    <div
+                      key={attachment.id}
+                      className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700 rounded-lg"
+                    >
+                      <div className="flex items-center gap-2 flex-1 min-w-0">
+                        <Paperclip className="w-4 h-4 text-gray-500 flex-shrink-0" />
+                        <div className="flex-1 min-w-0">
+                          <div className="text-sm font-medium text-gray-900 dark:text-white truncate">
+                            {attachment.title || attachment.name}
+                          </div>
+                          <div className="text-xs text-gray-500 dark:text-gray-400">
+                            {formatFileSize(attachment.size)}
+                          </div>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <a
+                          href={attachment.url}
+                          download={attachment.name}
+                          className="p-1 text-blue-500 hover:text-blue-700"
+                          title="下载"
+                        >
+                          <Upload className="w-4 h-4" />
+                        </a>
+                        <button
+                          onClick={() => removeNodeAttachment(node.id, attachment.id)}
+                          className="p-1 text-red-500 hover:text-red-700"
+                          title="删除"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* 上传新附件 */}
+            <div className="space-y-2">
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                上传附件
+              </label>
+              <input
+                ref={attachmentInputRef}
+                type="file"
+                onChange={handleAttachmentUpload}
+                className="hidden"
+              />
+              <button
+                onClick={() => attachmentInputRef.current?.click()}
+                className="w-full px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg transition-colors flex items-center justify-center gap-2"
+              >
+                <Upload className="w-4 h-4" />
+                选择文件
+              </button>
+              <p className="text-xs text-gray-500 dark:text-gray-400">
+                支持任意文件类型，文件将以 base64 格式存储
+              </p>
             </div>
           </div>
         )}
