@@ -1,5 +1,5 @@
 import type { MindMapNode } from '../../types';
-import { getNodeWidth, getNodeHeight } from './layout';
+import { getNodeWidth, getNodeHeight, getNodeDimensions, clearNodeSizeCache } from './layout';
 
 /**
  * 获取节点的右边缘X坐标
@@ -33,4 +33,4 @@ export function getNodeCenter(node: MindMapNode): { x: number; y: number } {
 }
 
 // 重新导出节点尺寸计算函数
-export { getNodeWidth, getNodeHeight };
+export { getNodeWidth, getNodeHeight, getNodeDimensions, clearNodeSizeCache };

@@ -88,6 +88,36 @@ interface MindMapState {
   updateSelectedNodesStyle: (updates: Partial<MindMapNode['style']>) => void;
   collapseSelectedNodes: () => void;
   expandSelectedNodes: () => void;
+
+  // ==================== 新增功能方法 ====================
+
+  // 超链接
+  setNodeHyperlink: (nodeId: string, hyperlink: import('../types').NodeHyperlink | null) => void;
+  removeNodeHyperlink: (nodeId: string) => void;
+
+  // 标签
+  addNodeLabel: (nodeId: string, label: Omit<import('../types').NodeLabel, 'id'>) => void;
+  removeNodeLabel: (nodeId: string, labelId: string) => void;
+
+  // 图标/标记
+  addNodeMarker: (nodeId: string, marker: Omit<import('../types').NodeMarker, 'id'>) => void;
+  removeNodeMarker: (nodeId: string, markerId: string) => void;
+
+  // 注释
+  setNodeNotes: (nodeId: string, notes: import('../types').NodeNotes) => void;
+  removeNodeNotes: (nodeId: string) => void;
+
+  // 图片
+  addNodeImage: (nodeId: string, image: Omit<import('../types').NodeImage, 'id'>) => void;
+  removeNodeImage: (nodeId: string, imageId: string) => void;
+
+  // 附件
+  addNodeAttachment: (nodeId: string, attachment: Omit<import('../types').NodeAttachment, 'id'>) => void;
+  removeNodeAttachment: (nodeId: string, attachmentId: string) => void;
+
+  // 任务
+  setNodeTask: (nodeId: string, task: import('../types').NodeTask) => void;
+  removeNodeTask: (nodeId: string) => void;
 }
 
 export const useMindMapStore = create<MindMapState>((set, get) => ({
@@ -648,5 +678,297 @@ export const useMindMapStore = create<MindMapState>((set, get) => ({
     const updatedMindmap = deepClone(mindmap);
     updatedMindmap.modified = Date.now();
     set({ mindmap: updatedMindmap });
+  },
+
+  // ==================== 新增功能实现 ====================
+
+  // 设置节点超链接
+  setNodeHyperlink: (nodeId: string, hyperlink: import('../types').NodeHyperlink | null) => {
+    const { mindmap } = get();
+    if (!mindmap) return;
+
+    const updateInTree = (node: MindMapNode): boolean => {
+      if (node.id === nodeId) {
+        node.hyperlink = hyperlink || undefined;
+        node.metadata.modified = Date.now();
+        return true;
+      }
+      for (const child of node.children) {
+        if (updateInTree(child)) return true;
+      }
+      return false;
+    };
+
+    updateInTree(mindmap.root);
+    set({ mindmap: { ...mindmap, modified: Date.now() } });
+  },
+
+  // 移除节点超链接
+  removeNodeHyperlink: (nodeId: string) => {
+    get().setNodeHyperlink(nodeId, null);
+  },
+
+  // 添加节点标签
+  addNodeLabel: (nodeId: string, label: Omit<import('../types').NodeLabel, 'id'>) => {
+    const { mindmap } = get();
+    if (!mindmap) return;
+
+    const updateInTree = (node: MindMapNode): boolean => {
+      if (node.id === nodeId) {
+        if (!node.labels) node.labels = [];
+        node.labels.push({ ...label, id: generateId() });
+        node.metadata.modified = Date.now();
+        return true;
+      }
+      for (const child of node.children) {
+        if (updateInTree(child)) return true;
+      }
+      return false;
+    };
+
+    updateInTree(mindmap.root);
+    set({ mindmap: { ...mindmap, modified: Date.now() } });
+  },
+
+  // 移除节点标签
+  removeNodeLabel: (nodeId: string, labelId: string) => {
+    const { mindmap } = get();
+    if (!mindmap) return;
+
+    const updateInTree = (node: MindMapNode): boolean => {
+      if (node.id === nodeId) {
+        if (node.labels) {
+          node.labels = node.labels.filter((l) => l.id !== labelId);
+        }
+        node.metadata.modified = Date.now();
+        return true;
+      }
+      for (const child of node.children) {
+        if (updateInTree(child)) return true;
+      }
+      return false;
+    };
+
+    updateInTree(mindmap.root);
+    set({ mindmap: { ...mindmap, modified: Date.now() } });
+  },
+
+  // 添加节点图标/标记
+  addNodeMarker: (nodeId: string, marker: Omit<import('../types').NodeMarker, 'id'>) => {
+    const { mindmap } = get();
+    if (!mindmap) return;
+
+    const updateInTree = (node: MindMapNode): boolean => {
+      if (node.id === nodeId) {
+        if (!node.markers) node.markers = [];
+        node.markers.push({ ...marker, id: generateId() });
+        node.metadata.modified = Date.now();
+        return true;
+      }
+      for (const child of node.children) {
+        if (updateInTree(child)) return true;
+      }
+      return false;
+    };
+
+    updateInTree(mindmap.root);
+    set({ mindmap: { ...mindmap, modified: Date.now() } });
+  },
+
+  // 移除节点图标/标记
+  removeNodeMarker: (nodeId: string, markerId: string) => {
+    const { mindmap } = get();
+    if (!mindmap) return;
+
+    const updateInTree = (node: MindMapNode): boolean => {
+      if (node.id === nodeId) {
+        if (node.markers) {
+          node.markers = node.markers.filter((m) => m.id !== markerId);
+        }
+        node.metadata.modified = Date.now();
+        return true;
+      }
+      for (const child of node.children) {
+        if (updateInTree(child)) return true;
+      }
+      return false;
+    };
+
+    updateInTree(mindmap.root);
+    set({ mindmap: { ...mindmap, modified: Date.now() } });
+  },
+
+  // 设置节点注释
+  setNodeNotes: (nodeId: string, notes: import('../types').NodeNotes) => {
+    const { mindmap } = get();
+    if (!mindmap) return;
+
+    const updateInTree = (node: MindMapNode): boolean => {
+      if (node.id === nodeId) {
+        node.notes = notes;
+        node.metadata.modified = Date.now();
+        return true;
+      }
+      for (const child of node.children) {
+        if (updateInTree(child)) return true;
+      }
+      return false;
+    };
+
+    updateInTree(mindmap.root);
+    set({ mindmap: { ...mindmap, modified: Date.now() } });
+  },
+
+  // 移除节点注释
+  removeNodeNotes: (nodeId: string) => {
+    const { mindmap } = get();
+    if (!mindmap) return;
+
+    const updateInTree = (node: MindMapNode): boolean => {
+      if (node.id === nodeId) {
+        node.notes = undefined;
+        node.metadata.modified = Date.now();
+        return true;
+      }
+      for (const child of node.children) {
+        if (updateInTree(child)) return true;
+      }
+      return false;
+    };
+
+    updateInTree(mindmap.root);
+    set({ mindmap: { ...mindmap, modified: Date.now() } });
+  },
+
+  // 添加节点图片
+  addNodeImage: (nodeId: string, image: Omit<import('../types').NodeImage, 'id'>) => {
+    const { mindmap } = get();
+    if (!mindmap) return;
+
+    const updateInTree = (node: MindMapNode): boolean => {
+      if (node.id === nodeId) {
+        if (!node.images) node.images = [];
+        node.images.push({ ...image, id: generateId() });
+        node.metadata.modified = Date.now();
+        return true;
+      }
+      for (const child of node.children) {
+        if (updateInTree(child)) return true;
+      }
+      return false;
+    };
+
+    updateInTree(mindmap.root);
+    set({ mindmap: { ...mindmap, modified: Date.now() } });
+  },
+
+  // 移除节点图片
+  removeNodeImage: (nodeId: string, imageId: string) => {
+    const { mindmap } = get();
+    if (!mindmap) return;
+
+    const updateInTree = (node: MindMapNode): boolean => {
+      if (node.id === nodeId) {
+        if (node.images) {
+          node.images = node.images.filter((i) => i.id !== imageId);
+        }
+        node.metadata.modified = Date.now();
+        return true;
+      }
+      for (const child of node.children) {
+        if (updateInTree(child)) return true;
+      }
+      return false;
+    };
+
+    updateInTree(mindmap.root);
+    set({ mindmap: { ...mindmap, modified: Date.now() } });
+  },
+
+  // 添加节点附件
+  addNodeAttachment: (nodeId: string, attachment: Omit<import('../types').NodeAttachment, 'id'>) => {
+    const { mindmap } = get();
+    if (!mindmap) return;
+
+    const updateInTree = (node: MindMapNode): boolean => {
+      if (node.id === nodeId) {
+        if (!node.attachments) node.attachments = [];
+        node.attachments.push({ ...attachment, id: generateId() });
+        node.metadata.modified = Date.now();
+        return true;
+      }
+      for (const child of node.children) {
+        if (updateInTree(child)) return true;
+      }
+      return false;
+    };
+
+    updateInTree(mindmap.root);
+    set({ mindmap: { ...mindmap, modified: Date.now() } });
+  },
+
+  // 移除节点附件
+  removeNodeAttachment: (nodeId: string, attachmentId: string) => {
+    const { mindmap } = get();
+    if (!mindmap) return;
+
+    const updateInTree = (node: MindMapNode): boolean => {
+      if (node.id === nodeId) {
+        if (node.attachments) {
+          node.attachments = node.attachments.filter((a) => a.id !== attachmentId);
+        }
+        node.metadata.modified = Date.now();
+        return true;
+      }
+      for (const child of node.children) {
+        if (updateInTree(child)) return true;
+      }
+      return false;
+    };
+
+    updateInTree(mindmap.root);
+    set({ mindmap: { ...mindmap, modified: Date.now() } });
+  },
+
+  // 设置节点任务
+  setNodeTask: (nodeId: string, task: import('../types').NodeTask) => {
+    const { mindmap } = get();
+    if (!mindmap) return;
+
+    const updateInTree = (node: MindMapNode): boolean => {
+      if (node.id === nodeId) {
+        node.task = task;
+        node.metadata.modified = Date.now();
+        return true;
+      }
+      for (const child of node.children) {
+        if (updateInTree(child)) return true;
+      }
+      return false;
+    };
+
+    updateInTree(mindmap.root);
+    set({ mindmap: { ...mindmap, modified: Date.now() } });
+  },
+
+  // 移除节点任务
+  removeNodeTask: (nodeId: string) => {
+    const { mindmap } = get();
+    if (!mindmap) return;
+
+    const updateInTree = (node: MindMapNode): boolean => {
+      if (node.id === nodeId) {
+        node.task = undefined;
+        node.metadata.modified = Date.now();
+        return true;
+      }
+      for (const child of node.children) {
+        if (updateInTree(child)) return true;
+      }
+      return false;
+    };
+
+    updateInTree(mindmap.root);
+    set({ mindmap: { ...mindmap, modified: Date.now() } });
   },
 }));

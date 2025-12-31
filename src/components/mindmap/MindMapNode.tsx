@@ -1,9 +1,10 @@
 import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { useMindMapStore } from '../../stores/mindmapStore';
-import { ChevronRight, ChevronDown, Sparkles, Plus, Type, Check } from 'lucide-react';
+import { ChevronRight, ChevronDown, Sparkles, Plus, Type, Check, Link, Tag, Image as ImageIcon, FileText } from 'lucide-react';
 import { NodeEditor } from './NodeEditor';
 import { useNodeContextMenu, ContextMenu } from '../common/ContextMenu';
-import { getNodeWidth, getNodeHeight } from '../../lib/mindmap/nodeUtils';
+import { getNodeDimensions, clearNodeSizeCache } from '../../lib/mindmap/nodeUtils';
+import { NodeEnrichmentPanel } from './NodeEnrichmentPanel';
 
 interface MindMapNodeProps {
   node: import('../../types').MindMapNode;
@@ -14,7 +15,7 @@ let dragNodeId: string | null = null;
 
 export const MindMapNode: React.FC<MindMapNodeProps> = ({ node }) => {
 
-  const { selectedNodeId, selectedNodeIds, selectNode, toggleNodeSelection, updateNode, toggleCollapse, addNode, moveNode } = useMindMapStore();
+  const { selectedNodeId, selectedNodeIds, selectNode, toggleNodeSelection, updateNode, toggleCollapse, addNode, moveNode, mindmap } = useMindMapStore();
   const isSelected = selectedNodeId === node.id;
   const isMultiSelected = selectedNodeIds.includes(node.id);
 
@@ -23,10 +24,29 @@ export const MindMapNode: React.FC<MindMapNodeProps> = ({ node }) => {
   const [isEditing, setIsEditing] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const [isDragOver, setIsDragOver] = useState(false);
+  const [showEnrichmentPanel, setShowEnrichmentPanel] = useState(false);
   const nodeRef = useRef<HTMLDivElement>(null);
 
   // 右键菜单
   const { contextMenu, handleContextMenu, closeContextMenu, menuItems } = useNodeContextMenu(node.id);
+
+  // 处理超链接点击
+  const handleHyperlinkClick = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (node.hyperlink) {
+      if (node.hyperlink.type === 'topic' && node.hyperlink.targetNodeId) {
+        // 跳转到目标节点
+        selectNode(node.hyperlink.targetNodeId);
+      } else if (node.hyperlink.type === 'url' || node.hyperlink.type === 'email') {
+        // 打开链接
+        window.open(node.hyperlink.url, '_blank');
+      }
+    }
+  }, [node.hyperlink, selectNode]);
+
+  // 获取节点尺寸和分行文本
+  const nodeDimensions = mindmap ? getNodeDimensions(node, mindmap.root) : getNodeDimensions(node);
+  const { width, height, lines } = nodeDimensions;
 
   // 进入编辑模式
   const startEditing = useCallback(() => {
@@ -58,6 +78,8 @@ export const MindMapNode: React.FC<MindMapNodeProps> = ({ node }) => {
   // 完成编辑
   const handleFinishEdit = useCallback((newContent: string) => {
     if (newContent.trim() !== '' && newContent !== node.content) {
+      // 清除该节点的尺寸缓存
+      clearNodeSizeCache(node.id);
       updateNode(node.id, { content: newContent.trim() });
     }
     stopEditing();
@@ -180,8 +202,6 @@ export const MindMapNode: React.FC<MindMapNodeProps> = ({ node }) => {
   }, [node.id, moveNode]);
 
   const hasChildren = node.children.length > 0;
-  const width = getNodeWidth(node);
-  const height = getNodeHeight(node);
 
   // 如果正在编辑，显示编辑器
   if (isEditing) {
@@ -246,9 +266,9 @@ export const MindMapNode: React.FC<MindMapNodeProps> = ({ node }) => {
         onDrop={handleDrop}
       >
         {/* 节点内容 */}
-        <div className="flex items-center justify-center h-full px-3">
-          <span
-            className="text-center truncate"
+        <div className="flex items-center justify-center h-full px-3 py-2">
+          <div
+            className="text-center"
             style={{
               color: node.style.textColor,
               fontSize: `${node.style.fontSize}px`,
@@ -257,14 +277,99 @@ export const MindMapNode: React.FC<MindMapNodeProps> = ({ node }) => {
               fontStyle: node.style.fontStyle,
               textDecoration: node.style.textDecoration,
               textAlign: node.style.textAlign as any,
+              lineHeight: 1.5,
+              wordWrap: 'break-word',
+              overflowWrap: 'break-word',
+              whiteSpace: 'pre-wrap',
             }}
           >
-            {node.content}
-          </span>
+            {lines.map((line, index) => (
+              <div key={index} style={{ minHeight: '1.5em' }}>
+                {line || '\u00A0'}
+              </div>
+            ))}
+          </div>
           {node.metadata.aiGenerated && (
             <Sparkles className="w-3 h-3 ml-1 text-blue-400 flex-shrink-0" />
           )}
+
+          {/* 超链接图标 */}
+          {node.hyperlink && (
+            <button
+              className="ml-1 text-blue-500 hover:text-blue-700 flex-shrink-0"
+              onClick={handleHyperlinkClick}
+              title={node.hyperlink.title || node.hyperlink.url}
+            >
+              <Link className="w-3 h-3" />
+            </button>
+          )}
+
+          {/* 注释图标 */}
+          {node.notes && (
+            <div className="ml-1 text-yellow-600 flex-shrink-0" title="有注释">
+              <FileText className="w-3 h-3" />
+            </div>
+          )}
+
+          {/* 图片图标 */}
+          {node.images && node.images.length > 0 && (
+            <div className="ml-1 text-green-600 flex-shrink-0" title={`包含 ${node.images.length} 张图片`}>
+              <ImageIcon className="w-3 h-3" />
+            </div>
+          )}
         </div>
+
+        {/* 标签显示（节点下方） */}
+        {node.labels && node.labels.length > 0 && (
+          <div className="absolute -bottom-6 left-0 right-0 flex flex-wrap gap-1 justify-center">
+            {node.labels.map((label) => (
+              <span
+                key={label.id}
+                className="px-2 py-0.5 text-xs rounded-full whitespace-nowrap"
+                style={{
+                  color: label.color,
+                  backgroundColor: label.backgroundColor || `${label.color}20`,
+                }}
+              >
+                {label.text}
+              </span>
+            ))}
+          </div>
+        )}
+
+        {/* 图标/标记显示（节点右下角） */}
+        {node.markers && node.markers.length > 0 && (
+          <div className="absolute -bottom-2 -right-2 flex gap-0.5">
+            {node.markers.slice(0, 3).map((marker) => (
+              <div
+                key={marker.id}
+                className="w-4 h-4 rounded-full flex items-center justify-center text-white text-xs"
+                style={{ backgroundColor: marker.color || '#6366f1' }}
+                title={`${marker.type}: ${marker.value}`}
+              >
+                {marker.type === 'priority' && '⚡'}
+                {marker.type === 'progress' && '●'}
+                {marker.type === 'risk' && '⚠'}
+                {marker.type === 'emotion' && '😊'}
+              </div>
+            ))}
+            {node.markers.length > 3 && (
+              <div className="w-4 h-4 rounded-full bg-gray-400 flex items-center justify-center text-white text-xs">
+                +{node.markers.length - 3}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* 任务进度条 */}
+        {node.task?.enabled && node.task.progress !== undefined && (
+          <div className="absolute -top-1 left-2 right-2 h-1 bg-gray-200 rounded-full overflow-hidden">
+            <div
+              className="h-full bg-green-500 transition-all duration-300"
+              style={{ width: `${node.task.progress}%` }}
+            />
+          </div>
+        )}
 
         {/* 多选标记（右上角小圆点） */}
         {isMultiSelected && (
@@ -287,17 +392,31 @@ export const MindMapNode: React.FC<MindMapNodeProps> = ({ node }) => {
 
         {/* 字体样式快捷按钮（选中时显示） */}
         {isSelected && (
-          <button
-            className="absolute -bottom-3 -right-3 w-8 h-8 rounded-full bg-purple-500 hover:bg-purple-600 text-white border-2 border-white dark:border-gray-800 flex items-center justify-center shadow-sm z-10"
-            onClick={(e) => {
-              e.stopPropagation();
-              // 触发全局事件打开字体面板
-              window.dispatchEvent(new CustomEvent('toggle-font-panel'));
-            }}
-            title="字体样式"
-          >
-            <Type className="w-4 h-4" />
-          </button>
+          <>
+            <button
+              className="absolute -bottom-3 -right-3 w-8 h-8 rounded-full bg-purple-500 hover:bg-purple-600 text-white border-2 border-white dark:border-gray-800 flex items-center justify-center shadow-sm z-10"
+              onClick={(e) => {
+                e.stopPropagation();
+                // 触发全局事件打开字体面板
+                window.dispatchEvent(new CustomEvent('toggle-font-panel'));
+              }}
+              title="字体样式"
+            >
+              <Type className="w-4 h-4" />
+            </button>
+
+            {/* 增强功能按钮 */}
+            <button
+              className="absolute -bottom-3 left-0 w-8 h-8 rounded-full bg-indigo-500 hover:bg-indigo-600 text-white border-2 border-white dark:border-gray-800 flex items-center justify-center shadow-sm z-10"
+              onClick={(e) => {
+                e.stopPropagation();
+                setShowEnrichmentPanel(!showEnrichmentPanel);
+              }}
+              title="增强功能"
+            >
+              <Tag className="w-4 h-4" />
+            </button>
+          </>
         )}
 
         {/* 折叠/展开按钮 */}
@@ -322,6 +441,14 @@ export const MindMapNode: React.FC<MindMapNodeProps> = ({ node }) => {
           y={contextMenu.y}
           items={menuItems}
           onClose={closeContextMenu}
+        />
+      )}
+
+      {/* 增强功能面板 */}
+      {showEnrichmentPanel && (
+        <NodeEnrichmentPanel
+          node={node}
+          onClose={() => setShowEnrichmentPanel(false)}
         />
       )}
     </>
