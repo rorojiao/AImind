@@ -4,15 +4,15 @@ import App from './App'
 import './index.css'
 
 // 初始化全局网络搜索功能
-// 使用免费的 DuckDuckGo 搜索（无需 API key）
-// 如需使用其他搜索源，可在 AI 设置中配置
+// 使用智谱AI Web Search API（真实网络搜索）
 import { initGlobalWebSearch } from './lib/search/webSearchService'
 
-// 初始化全局搜索（使用默认的 DuckDuckGo）
+// 初始化全局搜索（使用智谱AI + 你的 API key）
 initGlobalWebSearch({
-  type: 'duckduckgo',
-  name: 'DuckDuckGo',
+  type: 'zhipu',
+  name: '智谱AI',
   enabled: true,
+  apiKey: '8611232f6f8e42f19d29eb454f14b20f.8L7DTW3fIsLoivJF',
 })
 
 ReactDOM.createRoot(document.getElementById('root')!).render(

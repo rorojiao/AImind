@@ -24,40 +24,27 @@ interface WebSearchState {
 
 // 默认搜索源配置
 const defaultSearchSource: SearchSourceConfig = {
-  type: 'duckduckgo',
-  name: 'DuckDuckGo',
+  type: 'zhipu',
+  name: '智谱AI',
   enabled: true,
+  apiKey: '8611232f6f8e42f19d29eb454f14b20f.8L7DTW3fIsLoivJF',
 };
 
 // 可用的搜索源列表
 const availableSources = [
+  {
+    type: 'zhipu' as const,
+    name: '智谱AI',
+    description: '智谱AI Web Search API，真实网络搜索',
+    requiresApiKey: true,
+    helpUrl: 'https://open.bigmodel.cn/',
+  },
   {
     type: 'duckduckgo' as const,
     name: 'DuckDuckGo',
     description: '免费搜索引擎，无需 API key，隐私保护',
     requiresApiKey: false,
     helpUrl: 'https://duckduckgo.com/',
-  },
-  {
-    type: 'serpapi' as const,
-    name: 'SerpAPI (Google)',
-    description: '使用 Google 搜索结果，需要 API key',
-    requiresApiKey: true,
-    helpUrl: 'https://serpapi.com/',
-  },
-  {
-    type: 'serpapi' as const,
-    name: 'SerpAPI (Bing)',
-    description: '使用 Bing 搜索结果，需要 API key',
-    requiresApiKey: true,
-    helpUrl: 'https://serpapi.com/',
-  },
-  {
-    type: 'custom' as const,
-    name: '自定义搜索 API',
-    description: '使用自建或第三方搜索 API',
-    requiresApiKey: false,
-    helpUrl: undefined,
   },
 ];
 

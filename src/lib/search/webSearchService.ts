@@ -1,6 +1,6 @@
 /**
  * 网络搜索服务
- * 支持多种搜索源：免费API、付费API、自建服务
+ * 使用智谱AI Web Search API（支持真实网络搜索）
  */
 
 export interface SearchResult {
@@ -17,7 +17,7 @@ export interface SearchOptions {
 /**
  * 搜索源类型
  */
-export type SearchSourceType = 'duckduckgo' | 'serpapi' | 'google' | 'bing' | 'custom';
+export type SearchSourceType = 'zhipu' | 'duckduckgo' | 'custom';
 
 /**
  * 搜索源配置
@@ -31,14 +31,78 @@ export interface SearchSourceConfig {
 }
 
 /**
- * DuckDuckGo 搜索（免费，无需 API key）
- * 使用 DuckDuckGo Instant Answer API
+ * 智谱AI Web Search API
+ * 使用官方API进行真实网络搜索
+ */
+async function searchZhipuAI(query: string, apiKey: string, options: SearchOptions = {}): Promise<SearchResult[]> {
+  const maxResults = options.maxResults || 10;
+
+  try {
+    const response = await fetch('https://open.bigmodel.cn/api/paas/v4/tools', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        model: 'glm-4-flash',
+        stream: false,
+        tools: [
+          {
+            type: 'web_search',
+            web_search: {
+              enable: true,
+              search_query: query,
+              search_result: true,
+              count: maxResults.toString(),
+            },
+          },
+        ],
+      }),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('[ZhipuAI] API error:', response.status, errorText);
+      throw new Error(`ZhipuAI API failed: ${response.status} - ${errorText}`);
+    }
+
+    const data = await response.json();
+
+    // 解析搜索结果
+    const results: SearchResult[] = [];
+
+    // 检查是否有 tool_calls
+    if (data.choices && data.choices[0] && data.choices[0].message.tool_calls) {
+      for (const toolCall of data.choices[0].message.tool_calls) {
+        if (toolCall.type === 'web_search' && toolCall.web_search) {
+          const searchResults = toolCall.web_search.results || [];
+          for (const item of searchResults) {
+            results.push({
+              title: item.title || '',
+              url: item.media_url || item.url || '',
+              snippet: item.content || item.description || '',
+            });
+          }
+        }
+      }
+    }
+
+    console.log(`[ZhipuAI] 找到 ${results.length} 条结果`);
+    return results;
+  } catch (error) {
+    console.error('[ZhipuAI] search error:', error);
+    throw error;
+  }
+}
+
+/**
+ * DuckDuckGo 搜索（备用方案）
  */
 async function searchDuckDuckGo(query: string, options: SearchOptions = {}): Promise<SearchResult[]> {
   const maxResults = options.maxResults || 10;
 
   try {
-    // 使用 DuckDuckGo 的 HTML 版本进行解析
     const url = `https://html.duckduckgo.com/html/?q=${encodeURIComponent(query)}`;
 
     const response = await fetch(url, {
@@ -70,74 +134,7 @@ async function searchDuckDuckGo(query: string, options: SearchOptions = {}): Pro
 
     return results;
   } catch (error) {
-    console.error('DuckDuckGo search error:', error);
-    return [];
-  }
-}
-
-/**
- * SerpAPI 搜索（需要 API key，支持 Google、Bing 等）
- */
-async function searchSerpAPI(query: string, config: SearchSourceConfig, options: SearchOptions = {}): Promise<SearchResult[]> {
-  if (!config.apiKey) {
-    throw new Error('SerpAPI requires an API key');
-  }
-
-  const maxResults = options.maxResults || 10;
-  const engine = config.baseUrl?.includes('bing') ? 'bing' : 'google';
-
-  const url = `https://serpapi.com/search?engine=${engine}&q=${encodeURIComponent(query)}&api_key=${config.apiKey}&num=${maxResults}`;
-
-  try {
-    const response = await fetch(url);
-    if (!response.ok) {
-      throw new Error(`SerpAPI failed: ${response.status}`);
-    }
-
-    const data = await response.json();
-
-    return (data.organic_results || []).map((item: any) => ({
-      title: item.title,
-      url: item.link,
-      snippet: item.snippet || '',
-    }));
-  } catch (error) {
-    console.error('SerpAPI search error:', error);
-    return [];
-  }
-}
-
-/**
- * 自定义搜索 API
- */
-async function searchCustom(query: string, config: SearchSourceConfig, options: SearchOptions = {}): Promise<SearchResult[]> {
-  if (!config.baseUrl) {
-    throw new Error('Custom search requires a base URL');
-  }
-
-  const maxResults = options.maxResults || 10;
-  let url = `${config.baseUrl}?q=${encodeURIComponent(query)}&maxResults=${maxResults}`;
-
-  if (config.apiKey) {
-    url += `&apiKey=${config.apiKey}`;
-  }
-
-  try {
-    const response = await fetch(url);
-    if (!response.ok) {
-      throw new Error(`Custom search failed: ${response.status}`);
-    }
-
-    const data = await response.json();
-
-    // 假设返回格式为 { results: [{ title, url, snippet }] }
-    return (data.results || []).map((item: any) => ({
-      title: item.title,
-      url: item.url,
-      snippet: item.snippet || item.description || '',
-    }));
-  } catch (error) {
-    console.error('Custom search error:', error);
+    console.error('[DuckDuckGo] search error:', error);
     return [];
   }
 }
@@ -147,7 +144,7 @@ async function searchCustom(query: string, config: SearchSourceConfig, options: 
  */
 export async function webSearch(
   query: string,
-  config: SearchSourceConfig = { type: 'duckduckgo', name: 'DuckDuckGo', enabled: true },
+  config: SearchSourceConfig = { type: 'zhipu', name: '智谱AI', enabled: true, apiKey: '' },
   options: SearchOptions = {}
 ): Promise<string[]> {
   console.log(`[WebSearch] 搜索: "${query}" 使用 ${config.name}`);
@@ -156,15 +153,17 @@ export async function webSearch(
 
   try {
     switch (config.type) {
+      case 'zhipu':
+        if (!config.apiKey) {
+          throw new Error('智谱AI搜索需要 API key');
+        }
+        results = await searchZhipuAI(query, config.apiKey, options);
+        break;
+
       case 'duckduckgo':
         results = await searchDuckDuckGo(query, options);
         break;
-      case 'serpapi':
-        results = await searchSerpAPI(query, config, options);
-        break;
-      case 'custom':
-        results = await searchCustom(query, config, options);
-        break;
+
       default:
         console.warn(`[WebSearch] 不支持的搜索类型: ${config.type}`);
         return [];
@@ -175,11 +174,8 @@ export async function webSearch(
       return [];
     }
 
-    console.log(`[WebSearch] 找到 ${results.length} 条结果`);
-
     // 转换为字符串数组格式（与现有系统兼容）
     return results.map((r) => {
-      // 格式: "标题: 描述" 或仅 "标题"
       const snippet = r.snippet ? ` - ${r.snippet}` : '';
       return `${r.title}${snippet}`;
     });
@@ -194,7 +190,7 @@ export async function webSearch(
  */
 export function createGlobalWebSearchFunction(config?: SearchSourceConfig) {
   return async (query: string): Promise<string[]> => {
-    const searchConfig = config || { type: 'duckduckgo', name: 'DuckDuckGo', enabled: true };
+    const searchConfig = config || { type: 'zhipu', name: '智谱AI', enabled: true, apiKey: '' };
     return webSearch(query, searchConfig, { maxResults: 20 });
   };
 }
@@ -210,5 +206,5 @@ export function initGlobalWebSearch(config?: SearchSourceConfig) {
   }
 
   (globalThis as any).performWebSearch = createGlobalWebSearchFunction(config);
-  console.log('[WebSearch] 全局搜索函数已初始化，使用搜索源:', config?.name || 'DuckDuckGo');
+  console.log('[WebSearch] 全局搜索函数已初始化，使用搜索源:', config?.name || '智谱AI');
 }
