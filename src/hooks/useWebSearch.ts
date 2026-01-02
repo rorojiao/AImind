@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useAIStore } from '../stores/aiStore';
-import { searchMultiple, getFallbackResults, shouldSearchOnline } from '../lib/ai/searchEngine';
+import { searchMultiple, getFallbackResults } from '../lib/ai/searchEngine';
 
 /**
  * 扩展的搜索上下文接口
@@ -21,7 +21,14 @@ export interface SearchContext {
 }
 
 /**
- * 网络搜索Hook（使用真实搜索引擎）
+ * 检查真实网络搜索是否可用
+ */
+function hasRealWebSearch(): boolean {
+  return typeof (globalThis as any).performWebSearch === 'function';
+}
+
+/**
+ * 网络搜索Hook（使用真实搜索引擎或知识库fallback）
  */
 export function useWebSearch() {
   const [isSearching, setIsSearching] = useState(false);
@@ -29,34 +36,12 @@ export function useWebSearch() {
 
   /**
    * 执行智能搜索（增强版 - 利用完整上下文）
+   * 总是尝试搜索，使用真实搜索或fallback到知识库
    */
   const search = async (
     nodeContent: string,
     context: SearchContext
   ): Promise<string | null> => {
-    // 判断是否是新闻列表类内容（这类内容让AI直接生成）
-    const isNewsList =
-      nodeContent.includes('条') &&
-      (nodeContent.includes('新闻') ||
-        nodeContent.includes('资讯') ||
-        nodeContent.includes('最新') ||
-        nodeContent.includes('今日') ||
-        nodeContent.includes('今天'));
-
-    if (isNewsList) {
-      addSearchLog({
-        query: nodeContent,
-        status: 'skipped',
-        message: '新闻列表 - AI将基于知识生成',
-      });
-      return null;
-    }
-
-    // 使用改进的搜索判断逻辑
-    if (!shouldSearchOnline(nodeContent, context.depth)) {
-      return null;
-    }
-
     setIsSearching(true);
 
     // 生成增强的搜索查询 - 利用完整路径和上下文
@@ -73,41 +58,62 @@ export function useWebSearch() {
       searchQuery = `${context.rootTopic} ${nodeContent}`;
     }
 
+    // 检查真实搜索是否可用
+    const hasRealSearch = hasRealWebSearch();
+    const searchType = hasRealSearch ? '网络搜索' : '知识库搜索';
+
     // 添加搜索开始日志
     const logId = `search-${Date.now()}`;
     addSearchLog({
       query: searchQuery,
       status: 'searching',
-      message: '正在搜索...',
+      message: `正在${searchType}...`,
     });
 
     try {
-      // 使用真实搜索
-      const results = await searchMultiple(searchQuery);
+      // 尝试使用真实搜索（如果可用）
+      let realResults: string[] = [];
+      let usedRealSearch = false;
 
-      // 如果没有搜索结果，尝试使用fallback结果
-      const finalResults = results.length > 0 ? results : getFallbackResults(searchQuery, 20);
+      if (hasRealSearch) {
+        console.log(`[搜索] 使用真实网络搜索: ${searchQuery}`);
+        realResults = await searchMultiple(searchQuery);
+        usedRealSearch = realResults.length > 0;
+      } else {
+        console.warn(`[搜索] 真实网络搜索不可用，使用知识库: ${searchQuery}`);
+      }
+
+      // 如果真实搜索没有结果，使用fallback
+      const finalResults = realResults.length > 0 ? realResults : getFallbackResults(searchQuery, 20);
 
       if (finalResults.length === 0) {
         updateSearchLog(logId, {
           status: 'skipped',
-          message: '未找到结果 - AI将使用本地知识',
+          message: '未找到结果',
         });
         return null;
       }
 
-      // 更新搜索成功日志，包含详细结果
+      // 构建结果描述（区分真实搜索和知识库）
+      const resultSource = usedRealSearch ? '网络搜索' : '知识库';
+      const resultMessage = usedRealSearch
+        ? `从网络找到 ${finalResults.length} 条结果`
+        : `从知识库找到 ${finalResults.length} 条结果（网络搜索不可用）`;
+
+      // 更新搜索成功日志
       updateSearchLog(logId, {
         status: 'success',
         resultCount: finalResults.length,
-        message: `找到 ${finalResults.length} 条结果`,
-        results: finalResults, // 保存详细结果
+        message: resultMessage,
+        results: finalResults,
+        source: usedRealSearch ? 'web' : 'knowledge', // 标记来源
       });
 
-      // 格式化搜索结果为AI可用的上下文（增强版 - 包含完整上下文信息）
-      let contextText = `## 网络搜索参考\n\n`;
+      // 格式化搜索结果为AI可用的上下文（增强版 - 包含来源信息）
+      let contextText = `## 搜索参考\n\n`;
 
-      // 添加节点位置信息
+      // 添加搜索来源信息
+      contextText += `**数据来源**：${resultSource}\n`;
       contextText += `**当前位置**：${context.fullNodePath.join(' → ')}\n`;
       contextText += `**搜索查询**：${searchQuery}\n\n`;
 
@@ -117,7 +123,7 @@ export function useWebSearch() {
         contextText += `请生成与已有节点不重复的内容。\n\n`;
       }
 
-      contextText += `**搜索结果**（找到 ${finalResults.length} 条相关信息）：\n\n`;
+      contextText += `**搜索结果**（${resultMessage}）：\n\n`;
 
       finalResults.forEach((result, index) => {
         contextText += `${index + 1}. ${result}\n`;

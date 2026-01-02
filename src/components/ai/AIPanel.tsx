@@ -271,6 +271,24 @@ function SearchLogItem({ log }: { log: SearchLog }) {
 
   const hasResults = log.results && log.results.length > 0;
 
+  // 获取来源标签
+  const getSourceBadge = () => {
+    if (!log.source) return null;
+    if (log.source === 'web') {
+      return (
+        <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300">
+          网络
+        </span>
+      );
+    } else {
+      return (
+        <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300">
+          知识库
+        </span>
+      );
+    }
+  };
+
   return (
     <div className="border border-gray-200 dark:border-gray-700 rounded overflow-hidden">
       {/* 可点击的头部 */}
@@ -285,15 +303,18 @@ function SearchLogItem({ log }: { log: SearchLog }) {
               <p className={`font-medium ${getStatusText()} truncate`}>
                 {log.query}
               </p>
-              {hasResults && (
-                <div className="flex items-center gap-1 ml-2">
-                  {log.expanded ? (
-                    <ChevronDown className="w-3 h-3 text-gray-500" />
-                  ) : (
-                    <ChevronRight className="w-3 h-3 text-gray-500" />
-                  )}
-                </div>
-              )}
+              <div className="flex items-center gap-1.5 ml-2">
+                {getSourceBadge()}
+                {hasResults && (
+                  <div className="flex items-center">
+                    {log.expanded ? (
+                      <ChevronDown className="w-3 h-3 text-gray-500" />
+                    ) : (
+                      <ChevronRight className="w-3 h-3 text-gray-500" />
+                    )}
+                  </div>
+                )}
+              </div>
             </div>
             <p className="text-gray-500 dark:text-gray-400 mt-0.5">
               {log.message}

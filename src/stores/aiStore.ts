@@ -12,6 +12,7 @@ export interface SearchLog {
   timestamp: number;
   results?: string[]; // 搜索结果详情
   expanded?: boolean; // 是否展开查看详情
+  source?: 'web' | 'knowledge'; // 搜索来源：网络搜索或知识库
 }
 
 interface AIState {
