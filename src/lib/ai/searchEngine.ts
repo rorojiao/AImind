@@ -485,8 +485,34 @@ const INDUSTRY_KNOWLEDGE: Record<string, string[]> = {
     '法律文书：起诉状、答辩状、法律意见书',
   ],
 
-  // 媒体/娱乐
+  // 媒体/娱乐（含游戏出海）
   media: [
+    // 游戏出海相关
+    '手游出海：海外市场选择、本地化运营、文化适配',
+    '游戏出海：发行策略、渠道选择、推广方案',
+    '手游发行：海外上架流程、ASO优化、评分管理',
+    '海外游戏市场：东南亚、日韩、欧美、中东市场特点',
+    '游戏本地化：语言翻译、文化适配、UI调整',
+    '海外游戏支付：支付方式对接、货币适配、税率处理',
+    '游戏海外运营：社区管理、用户反馈、活动策划',
+    '游戏出海合规：版号申请、内容审核、隐私政策',
+    '海外游戏获客：Facebook广告、Google Ads、网红营销',
+    '游戏数据出海：数据合规、GDPR、CCPA',
+    // 游戏开发
+    '游戏开发：游戏设计、美术资源、程序开发',
+    '手游开发：Unity、Unreal Engine、跨平台适配',
+    '游戏策划：数值设计、关卡设计、剧情设计',
+    '游戏美术：角色设计、场景设计、特效制作',
+    '游戏运营：版本更新、活动策划、数据分析',
+    '游戏变现：内购设计、广告变现、订阅模式',
+    '游戏用户分析：留存分析、付费分析、流失分析',
+    '游戏测试：功能测试、性能测试、兼容性测试',
+    // 电竞产业
+    '电竞产业：赛事运营、选手培养、商业化',
+    '电竞比赛：赛事策划、直播版权、赞助合作',
+    '电竞俱乐部：选手管理、训练体系、转会交易',
+    '电竞直播：直播平台、解说团队、粉丝运营',
+    // 其他媒体
     '内容创作：IP孵化、剧本创作、内容策划',
     '短视频制作：拍摄技巧、剪辑软件、特效包装',
     '直播运营：直播策划、互动技巧、转化策略',
@@ -494,8 +520,6 @@ const INDUSTRY_KNOWLEDGE: Record<string, string[]> = {
     'MCN机构：达人孵化、商业变现、资源整合',
     '影视制作：制片管理、拍摄流程、后期制作',
     '音乐产业：版权运营、数字音乐、现场演出',
-    '游戏开发：游戏设计、美术资源、程序开发',
-    '电竞产业：赛事运营、选手培养、商业化',
     '品牌营销：品牌植入、效果广告、社交传播',
     '网红经济：网红打造、商业合作、流量变现',
     'IP运营：IP授权、IP衍生、IP保护',
@@ -621,6 +645,109 @@ const INDUSTRY_KNOWLEDGE: Record<string, string[]> = {
 // ==================== 搜索功能 ====================
 
 /**
+ * 关键词权重表
+ * 用于处理跨行业的通用关键词，确保识别到正确的行业
+ * 权重范围：1-5，5表示该关键词对该行业最独特、最精确
+ */
+const KEYWORD_WEIGHTS: Record<string, Record<string, number>> = {
+  // 游戏/娱乐类高权重关键词（应优先匹配到media行业）
+  game: {
+    '手游': 5,
+    '端游': 5,
+    '游戏': 4,
+    '电竞': 5,
+    '手游出海': 5,
+    '游戏出海': 5,
+  },
+
+  // 电商类关键词（仅在明确是电商场景时高权重）
+  ecommerce: {
+    '跨境电商': 5,
+    '淘宝': 5,
+    '天猫': 5,
+    '京东': 5,
+    '拼多多': 5,
+    '抖音电商': 5,
+    '直播带货': 4,
+    '选品': 4,
+    '爆款': 4,
+    // "出海"在电商中权重降低，避免误匹配
+    '出海': 1,
+  },
+
+  // 营销类关键词
+  marketing: {
+    '新媒体营销': 5,
+    '内容营销': 5,
+    '社交媒体': 4,
+    '用户增长': 5,
+    '获客': 4,
+    '转化率': 4,
+    // 通用营销词汇权重较低
+    '营销': 2,
+    '推广': 2,
+    '流量': 2,
+  },
+
+  // 创业/商业类关键词
+  business: {
+    '商业模式': 5,
+    '盈利模式': 5,
+    '创业': 4,
+    '融资': 4,
+    '路演': 4,
+    '矩阵': 3,
+    '起号': 4,
+    // "出海"在商业中权重也降低
+    '出海': 1,
+    '变现': 3,
+    '赚钱': 2,
+  },
+
+  // 媒体/娱乐整体权重（游戏归属于此）
+  media: {
+    '手游': 5,
+    '端游': 5,
+    '游戏': 4,
+    '电竞': 5,
+    '动漫': 4,
+    '漫画': 4,
+    '动画': 4,
+    '影视': 4,
+    '剧集': 4,
+    '综艺': 4,
+    '音乐': 3,
+    '歌曲': 3,
+    '演唱会': 3,
+  },
+};
+
+/**
+ * 获取关键词的权重
+ */
+function getKeywordWeight(keyword: string, industryKey: string): number {
+  const lowerKeyword = keyword.toLowerCase();
+
+  // 检查特殊权重表
+  for (const [category, weights] of Object.entries(KEYWORD_WEIGHTS)) {
+    if (category === industryKey || (category === 'game' && industryKey === 'media')) {
+      for (const [weightedKeyword, weight] of Object.entries(weights)) {
+        if (lowerKeyword.includes(weightedKeyword.toLowerCase()) ||
+            weightedKeyword.toLowerCase().includes(lowerKeyword)) {
+          return weight;
+        }
+      }
+    }
+  }
+
+  // 默认权重：根据关键词长度和精确度
+  // 越长的关键词权重越高（更精确）
+  if (keyword.length >= 4) return 4;
+  if (keyword.length >= 3) return 3;
+  return 2;
+}
+
+/**
  * 智能判断是否需要搜索
  * 基于行业关键词和专业术语识别
  */
@@ -666,20 +793,49 @@ export function shouldSearchOnline(nodeContent: string, depth: number): boolean 
 }
 
 /**
- * 识别查询所属的行业
+ * 识别查询所属的行业（增强版 - 使用评分系统）
+ * 解决"手游出海"被错误识别为电商的问题
  */
 export function identifyIndustry(query: string): string | null {
   const lowerQuery = query.toLowerCase();
 
+  // 为每个行业计算匹配分数
+  const industryScores: Array<{ key: string; score: number; matches: string[] }> = [];
+
   for (const [key, industry] of Object.entries(INDUSTRY_KEYWORDS)) {
+    let score = 0;
+    const matches: string[] = [];
+
     for (const keyword of industry.keywords) {
       if (lowerQuery.includes(keyword.toLowerCase())) {
-        return key;
+        // 获取该关键词的权重
+        const weight = getKeywordWeight(keyword, key);
+        score += weight;
+        matches.push(`${keyword}(${weight})`);
       }
+    }
+
+    // 额外加分：匹配关键词数量
+    score += matches.length * 0.5;
+
+    if (score > 0) {
+      industryScores.push({ key, score, matches });
     }
   }
 
-  return null;
+  // 按分数排序，选择最高分的行业
+  if (industryScores.length === 0) {
+    return null;
+  }
+
+  industryScores.sort((a, b) => b.score - a.score);
+
+  // 调试日志
+  console.log(`[行业识别] 查询: "${query}"`);
+  console.log('[行业识别] 各行业得分:', industryScores);
+  console.log(`[行业识别] 最终选择: ${industryScores[0].key} (${industryScores[0].score}分)`);
+
+  return industryScores[0].key;
 }
 
 /**
