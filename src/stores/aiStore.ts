@@ -102,6 +102,7 @@ const defaultAgentConfig: AIAgentConfig = {
   depth: 3,
   breadth: 4,
   style: 'structured',
+  forceSearch: false, // 默认不强制搜索
 };
 
 // 从localStorage加载配置或使用默认配置

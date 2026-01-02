@@ -43,7 +43,7 @@ function findNodeById(node: MindMapNode, targetId: string): MindMapNode | null {
 
 // AI调用Hook
 export function useAI() {
-  const { currentProvider, setLoading, setError, addMessage, messages } = useAIStore();
+  const { currentProvider, setLoading, setError, addMessage, messages, agentConfig } = useAIStore();
   const { search, isSearching: isWebSearching } = useWebSearch();
 
   // 调用AI API
@@ -158,20 +158,22 @@ export function useAI() {
       // 获取父节点内容
       const parentContent = path.length > 2 ? path[path.length - 2] : null;
 
-      // 智能搜索 - 无感知获取网络信息
+      // 智能搜索 - 仅在forceSearch开启时进行
       let searchContext: string | undefined = undefined;
-      try {
-        const searchResult = await search(content, {
-          parentContent,
-          rootTopic: root.content,
-          depth,
-        });
-        if (searchResult) {
-          searchContext = searchResult;
+      if (agentConfig.forceSearch) {
+        try {
+          const searchResult = await search(content, {
+            parentContent,
+            rootTopic: root.content,
+            depth,
+          });
+          if (searchResult) {
+            searchContext = searchResult;
+          }
+        } catch (error) {
+          // 搜索失败不影响主流程，静默处理
+          console.debug('搜索跳过或失败:', error);
         }
-      } catch (error) {
-        // 搜索失败不影响主流程，静默处理
-        console.debug('搜索跳过或失败:', error);
       }
 
       // 获取已有子节点

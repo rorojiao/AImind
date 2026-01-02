@@ -4,11 +4,11 @@ import { useMindMapStore } from '../../stores/mindmapStore';
 import { useAI } from '../../hooks/useAI';
 import { Button } from '../common/Button';
 import { Input } from '../common/Input';
-import { Sparkles, Loader2, Send, Search, CheckCircle, XCircle, CircleSlash } from 'lucide-react';
+import { Sparkles, Loader2, Send, Search, CheckCircle, XCircle, CircleSlash, Globe } from 'lucide-react';
 import { useAIAgent } from '../../hooks/useAIAgent';
 
 export const AIPanel: React.FC = () => {
-  const { currentProvider, searchLogs } = useAIStore();
+  const { currentProvider, searchLogs, agentConfig, setAgentConfig } = useAIStore();
   const { mindmap, selectedNodeId } = useMindMapStore();
   const { isLoading, expandNode, isWebSearching } = useAI();
   const { isRunning, progress, runAgent } = useAIAgent();
@@ -89,6 +89,42 @@ export const AIPanel: React.FC = () => {
             </>
           )}
         </Button>
+
+        {/* 强制搜索开关 */}
+        <div className="mt-3 p-3 rounded-lg bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700">
+          <label className="flex items-center justify-between cursor-pointer">
+            <div className="flex items-center gap-2">
+              <Globe className="w-4 h-4 text-blue-500" />
+              <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                强制搜索最新信息
+              </span>
+            </div>
+            <div className="relative">
+              <input
+                type="checkbox"
+                checked={agentConfig.forceSearch}
+                onChange={(e) => setAgentConfig({ forceSearch: e.target.checked })}
+                className="sr-only"
+              />
+              <div
+                className={`w-11 h-6 rounded-full transition-colors ${
+                  agentConfig.forceSearch ? 'bg-blue-500' : 'bg-gray-300 dark:bg-gray-600'
+                }`}
+              >
+                <div
+                  className={`w-5 h-5 bg-white rounded-full shadow transform transition-transform ${
+                    agentConfig.forceSearch ? 'translate-x-6' : 'translate-x-0.5'
+                  } mt-0.5`}
+                />
+              </div>
+            </div>
+          </label>
+          <p className="text-xs text-gray-500 dark:text-gray-400 mt-2 ml-6">
+            {agentConfig.forceSearch
+              ? '开启：AI将搜索最新信息进行扩写，适合需要时效性的内容'
+              : '关闭：AI使用内置知识库进行扩写，速度更快'}
+          </p>
+        </div>
 
         {/* 进度显示 */}
         {progress && (

@@ -32,6 +32,7 @@ export interface AIAgentConfig {
   breadth: number;
   domainHint?: string;
   style: 'creative' | 'analytical' | 'structured';
+  forceSearch: boolean; // 强制搜索最新信息
 }
 
 // AI响应
