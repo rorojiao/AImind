@@ -7,7 +7,7 @@ import {
 } from '../lib/ai/prompts';
 import { extractJSON, parseNodeArray, parseAgentAnalysis, parseOverallAnalysis } from '../lib/ai/formatters';
 import type { AIMessage, MindMapNode } from '../types';
-import { useWebSearch } from './useWebSearch';
+import { useWebSearch, type SearchContext } from './useWebSearch';
 
 // 辅助函数：获取节点路径和深度
 function getNodePath(node: MindMapNode, targetId: string, currentPath: string[] = []): string[] | null {
@@ -39,6 +39,55 @@ function findNodeById(node: MindMapNode, targetId: string): MindMapNode | null {
     if (result) return result;
   }
   return null;
+}
+
+/**
+ * 获取节点的兄弟节点内容
+ */
+function getSiblings(node: MindMapNode, parent: MindMapNode | null): string[] {
+  if (!parent || parent.children.length <= 1) {
+    return [];
+  }
+  return parent.children
+    .filter(child => child.id !== node.id)
+    .map(child => child.content);
+}
+
+/**
+ * 获取父节点
+ */
+function getParentNode(root: MindMapNode, targetId: string, parent: MindMapNode | null = null): MindMapNode | null {
+  if (root.id === targetId) {
+    return parent;
+  }
+  for (const child of root.children) {
+    const result = getParentNode(child, targetId, root);
+    if (result !== null) return result;
+  }
+  return null;
+}
+
+/**
+ * 获取思维导图的结构信息
+ */
+function getMindmapStructure(root: MindMapNode): { totalNodes: number; maxDepth: number; branchCount: number } {
+  let totalNodes = 0;
+  let maxDepth = 0;
+
+  const traverse = (node: MindMapNode, depth: number) => {
+    totalNodes++;
+    maxDepth = Math.max(maxDepth, depth);
+    for (const child of node.children) {
+      traverse(child, depth + 1);
+    }
+  };
+
+  traverse(root, 0);
+  return {
+    totalNodes,
+    maxDepth,
+    branchCount: root.children.length,
+  };
 }
 
 // AI调用Hook
@@ -134,7 +183,7 @@ export function useAI() {
     }
   };
 
-  // 智能扩展节点（上下文感知版本 + 搜索增强）
+  // 智能扩展节点（上下文感知版本 + 搜索增强 - 完整版）
   const expandNode = async (
     content: string,
     context?: {
@@ -157,16 +206,27 @@ export function useAI() {
 
       // 获取父节点内容
       const parentContent = path.length > 2 ? path[path.length - 2] : null;
+      const parent = parentContent ? getParentNode(root, nodeId) : null;
 
-      // 智能搜索 - 仅在forceSearch开启时进行
+      // 获取兄弟节点
+      const siblings = getSiblings(node, parent);
+
+      // 获取思维导图结构信息
+      const structure = getMindmapStructure(root);
+
+      // 智能搜索 - 仅在forceSearch开启时进行（传递完整上下文）
       let searchContext: string | undefined = undefined;
       if (agentConfig.forceSearch) {
         try {
           const searchResult = await search(content, {
+            nodeContent: content,
+            fullNodePath: path,
             parentContent,
             rootTopic: root.content,
             depth,
-          });
+            siblings,
+            nodeStructure: structure,
+          } as SearchContext);
           if (searchResult) {
             searchContext = searchResult;
           }
@@ -179,14 +239,16 @@ export function useAI() {
       // 获取已有子节点
       const existingChildren = node.children.map((c) => c.content);
 
-      // 使用上下文感知提示词（包含搜索结果）
+      // 使用上下文感知提示词（包含完整上下文和搜索结果）
       const prompt = getContextAwareExpandPrompt({
         rootTopic: root.content,
         nodePath: path,
         currentContent: content,
         existingChildren: existingChildren.length > 0 ? existingChildren : undefined,
         depth,
-        siblingCount: undefined,
+        siblingCount: siblings.length,
+        siblings, // 传递兄弟节点
+        nodeStructure: structure, // 传递结构信息
         searchContext, // 传入搜索结果
       });
 

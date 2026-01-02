@@ -87,7 +87,7 @@ export function getOverallAnalysisPrompt(
 }`;
 }
 
-// 智能扩展（上下文感知版本 - 优化版 + 搜索增强）
+// 智能扩展（上下文感知版本 - 优化版 + 搜索增强 + 完整上下文）
 export function getContextAwareExpandPrompt(params: {
   rootTopic: string; // 中心主题
   nodePath: string[]; // 从根到当前节点的路径
@@ -95,9 +95,16 @@ export function getContextAwareExpandPrompt(params: {
   existingChildren?: string[]; // 已存在的子节点
   depth: number; // 当前深度（0=根节点）
   siblingCount?: number; // 兄弟节点数量
+  siblings?: string[]; // 兄弟节点内容
+  nodeStructure?: {
+    // 节点结构信息
+    totalNodes: number; // 总节点数
+    maxDepth: number; // 最大深度
+    branchCount: number; // 分支数量
+  };
   searchContext?: string; // 网络搜索结果（可选）
 }): string {
-  const { rootTopic, nodePath, currentContent, existingChildren, depth, searchContext } = params;
+  const { rootTopic, nodePath, currentContent, existingChildren, depth, siblings, nodeStructure, searchContext } = params;
 
   // 获取父节点
   const parentContent = nodePath.length > 1 ? nodePath[nodePath.length - 2] : null;
@@ -116,30 +123,70 @@ export function getContextAwareExpandPrompt(params: {
     return generateNewsListPrompt(currentContent, parentContent || rootTopic);
   }
 
-  // 构建精简的上下文（突出父子关系）
-  let contextInfo = `# 上下文信息\n`;
-  contextInfo += `中心主题：「${rootTopic}」\n`;
-  if (parentContent) {
-    contextInfo += `父节点：「${parentContent}」\n`;
+  // 构建增强的上下文（包含完整路径、兄弟节点、结构信息）
+  let contextInfo = `# 思维导图上下文信息\n\n`;
+
+  // 完整路径信息
+  contextInfo += `## 节点位置\n`;
+  contextInfo += `- **中心主题**：${rootTopic}\n`;
+  if (nodePath.length > 1) {
+    contextInfo += `- **完整路径**：${nodePath.join(' → ')}\n`;
   }
-  contextInfo += `当前节点：「${currentContent}」\n`;
+  if (parentContent) {
+    contextInfo += `- **父节点**：${parentContent}\n`;
+  }
+  contextInfo += `- **当前节点**：${currentContent}\n`;
+  contextInfo += `- **当前深度**：${depth}\n\n`;
+
+  // 兄弟节点信息（帮助理解横向关系）
+  if (siblings && siblings.length > 0) {
+    contextInfo += `## 兄弟节点（同级其他节点）\n`;
+    contextInfo += `以下节点已经存在，请**避免重复内容**，并补充它们未涵盖的方面：\n`;
+    siblings.forEach((sibling, index) => {
+      contextInfo += `${index + 1}. ${sibling}\n`;
+    });
+    contextInfo += `\n`;
+  }
 
   // 已有子节点提示
   if (existingChildren && existingChildren.length > 0) {
-    contextInfo += `已有子节点：${existingChildren.map((c) => `「${c}」`).join('、')}（请避免重复）\n`;
+    contextInfo += `## 已有子节点\n`;
+    contextInfo += `以下子节点已经存在，请**避免重复**：\n`;
+    existingChildren.forEach((child, index) => {
+      contextInfo += `${index + 1}. ${child}\n`;
+    });
+    contextInfo += `\n`;
+  }
+
+  // 思维导图整体结构（帮助理解全局）
+  if (nodeStructure) {
+    contextInfo += `## 思维导图结构\n`;
+    contextInfo += `- **总节点数**：${nodeStructure.totalNodes}\n`;
+    contextInfo += `- **最大深度**：${nodeStructure.maxDepth}\n`;
+    contextInfo += `- **主要分支数**：${nodeStructure.branchCount}\n\n`;
   }
 
   // 添加搜索上下文
   if (searchContext) {
-    contextInfo += `\n${searchContext}\n`;
+    contextInfo += `${searchContext}\n`;
   }
 
-  // 根据深度提供具体示例和指导
+  // 根据深度提供具体示例和指导（增强版 - 考虑兄弟节点）
   let instructions = '';
+
+  // 添加兄弟节点协调指导
+  if (siblings && siblings.length > 0) {
+    instructions += `\n## 重要：与兄弟节点协调\n`;
+    instructions += `你的兄弟节点包括：${siblings.join('、')}\n`;
+    instructions += `请确保新节点与它们：\n`;
+    instructions += `1. **不重复** - 避免生成相同或相似的内容\n`;
+    instructions += `2. **互补** - 补充兄弟节点未涵盖的方面\n`;
+    instructions += `3. **逻辑一致** - 保持与同级节点的逻辑层次一致\n\n`;
+  }
 
   if (depth === 0) {
     // 根节点 - 顶层维度拆分
-    instructions = `
+    instructions += `
 # 拆分要求
 这是中心主题，需要从**核心维度**进行顶层分类。
 
@@ -155,7 +202,7 @@ export function getContextAwareExpandPrompt(params: {
 `;
   } else if (depth === 1) {
     // 一级分支 - 深度分解
-    instructions = `
+    instructions += `
 # 拆分要求
 这是一级分支，需要对「${parentContent}」下的「${currentContent}」进行**深入分解**。
 
@@ -171,7 +218,7 @@ export function getContextAwareExpandPrompt(params: {
 `;
   } else if (depth === 2) {
     // 二级分支 - 具体执行
-    instructions = `
+    instructions += `
 # 拆分要求
 这是二级分支，需要提供**具体执行要点**。
 
@@ -187,7 +234,7 @@ export function getContextAwareExpandPrompt(params: {
 `;
   } else {
     // 三级及以下 - 细节要点
-    instructions = `
+    instructions += `
 # 拆分要求
 这是细节层级，需要提供**操作要点**或**建议停止**。
 
