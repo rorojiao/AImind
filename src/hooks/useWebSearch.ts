@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useAIStore } from '../stores/aiStore';
-import { searchMultiple } from '../lib/ai/searchEngine';
+import { searchMultiple, getFallbackResults, shouldSearchOnline } from '../lib/ai/searchEngine';
 
 /**
  * 网络搜索Hook（使用真实搜索引擎）
@@ -38,17 +38,8 @@ export function useWebSearch() {
       return null;
     }
 
-    // 检查是否需要搜索（基于关键词和深度）
-    const needsSearch =
-      nodeContent.includes('最新') ||
-      nodeContent.includes('新闻') ||
-      nodeContent.includes('动态') ||
-      nodeContent.includes('API') ||
-      nodeContent.includes('框架') ||
-      nodeContent.includes('工具') ||
-      nodeContent.includes('技术');
-
-    if (!needsSearch || context.depth > 2) {
+    // 使用改进的搜索判断逻辑
+    if (!shouldSearchOnline(nodeContent, context.depth)) {
       return null;
     }
 
@@ -71,7 +62,10 @@ export function useWebSearch() {
       // 使用真实搜索
       const results = await searchMultiple(searchQuery);
 
-      if (results.length === 0) {
+      // 如果没有搜索结果，尝试使用fallback结果
+      const finalResults = results.length > 0 ? results : getFallbackResults(searchQuery);
+
+      if (finalResults.length === 0) {
         updateSearchLog(logId, {
           status: 'skipped',
           message: '未找到结果 - AI将使用本地知识',
@@ -82,15 +76,15 @@ export function useWebSearch() {
       // 更新搜索成功日志
       updateSearchLog(logId, {
         status: 'success',
-        resultCount: results.length,
-        message: `找到 ${results.length} 条结果`,
+        resultCount: finalResults.length,
+        message: `找到 ${finalResults.length} 条结果`,
       });
 
       // 格式化搜索结果为AI可用的上下文
       let contextText = `## 网络搜索参考（查询："${searchQuery}"）\n\n`;
       contextText += `以下是搜索到的相关信息，请参考这些内容生成更准确的子节点：\n\n`;
 
-      results.forEach((result, index) => {
+      finalResults.forEach((result, index) => {
         contextText += `${index + 1}. ${result}\n`;
       });
 
