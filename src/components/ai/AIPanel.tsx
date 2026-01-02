@@ -4,7 +4,7 @@ import { useMindMapStore } from '../../stores/mindmapStore';
 import { useAI } from '../../hooks/useAI';
 import { Button } from '../common/Button';
 import { Input } from '../common/Input';
-import { Sparkles, Loader2, Send, Search, CheckCircle, XCircle, CircleSlash, Globe } from 'lucide-react';
+import { Sparkles, Loader2, Send, Search, CheckCircle, XCircle, CircleSlash, Globe, ChevronDown, ChevronRight } from 'lucide-react';
 import { useAIAgent } from '../../hooks/useAIAgent';
 
 export const AIPanel: React.FC = () => {
@@ -241,6 +241,8 @@ function findNode(
 
 // 搜索日志项组件
 function SearchLogItem({ log }: { log: SearchLog }) {
+  const { toggleSearchLogExpanded } = useAIStore();
+
   const getStatusIcon = () => {
     switch (log.status) {
       case 'searching':
@@ -267,20 +269,61 @@ function SearchLogItem({ log }: { log: SearchLog }) {
     }
   };
 
+  const hasResults = log.results && log.results.length > 0;
+
   return (
-    <div className="text-xs p-2 rounded bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700">
-      <div className="flex items-start gap-2">
-        <div className="mt-0.5">{getStatusIcon()}</div>
-        <div className="flex-1 min-w-0">
-          <p className={`font-medium ${getStatusText()} truncate`}>
-            {log.query}
-          </p>
-          <p className="text-gray-500 dark:text-gray-400 mt-0.5">
-            {log.message}
-            {log.resultCount !== undefined && ` (${log.resultCount}条)`}
-          </p>
+    <div className="border border-gray-200 dark:border-gray-700 rounded overflow-hidden">
+      {/* 可点击的头部 */}
+      <div
+        className="p-2 bg-gray-50 dark:bg-gray-900 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+        onClick={() => hasResults && toggleSearchLogExpanded(log.id)}
+      >
+        <div className="flex items-start gap-2">
+          <div className="mt-0.5">{getStatusIcon()}</div>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center justify-between">
+              <p className={`font-medium ${getStatusText()} truncate`}>
+                {log.query}
+              </p>
+              {hasResults && (
+                <div className="flex items-center gap-1 ml-2">
+                  {log.expanded ? (
+                    <ChevronDown className="w-3 h-3 text-gray-500" />
+                  ) : (
+                    <ChevronRight className="w-3 h-3 text-gray-500" />
+                  )}
+                </div>
+              )}
+            </div>
+            <p className="text-gray-500 dark:text-gray-400 mt-0.5">
+              {log.message}
+              {log.resultCount !== undefined && ` (${log.resultCount}条)`}
+            </p>
+          </div>
         </div>
       </div>
+
+      {/* 展开的详细结果 */}
+      {hasResults && log.expanded && (
+        <div className="p-3 bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700">
+          <p className="text-xs font-medium text-gray-700 dark:text-gray-300 mb-2">
+            搜索结果详情：
+          </p>
+          <div className="space-y-1.5 max-h-60 overflow-y-auto">
+            {log.results?.map((result, index) => (
+              <div
+                key={index}
+                className="text-xs p-2 bg-gray-50 dark:bg-gray-900 rounded border border-gray-200 dark:border-gray-700"
+              >
+                <span className="text-blue-600 dark:text-blue-400 font-medium mr-2">
+                  {index + 1}.
+                </span>
+                <span className="text-gray-700 dark:text-gray-300">{result}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

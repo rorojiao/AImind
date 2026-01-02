@@ -63,7 +63,7 @@ export function useWebSearch() {
       const results = await searchMultiple(searchQuery);
 
       // 如果没有搜索结果，尝试使用fallback结果
-      const finalResults = results.length > 0 ? results : getFallbackResults(searchQuery);
+      const finalResults = results.length > 0 ? results : getFallbackResults(searchQuery, 20);
 
       if (finalResults.length === 0) {
         updateSearchLog(logId, {
@@ -73,11 +73,12 @@ export function useWebSearch() {
         return null;
       }
 
-      // 更新搜索成功日志
+      // 更新搜索成功日志，包含详细结果
       updateSearchLog(logId, {
         status: 'success',
         resultCount: finalResults.length,
         message: `找到 ${finalResults.length} 条结果`,
+        results: finalResults, // 保存详细结果
       });
 
       // 格式化搜索结果为AI可用的上下文

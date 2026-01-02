@@ -10,6 +10,8 @@ export interface SearchLog {
   resultCount?: number;
   message?: string;
   timestamp: number;
+  results?: string[]; // 搜索结果详情
+  expanded?: boolean; // 是否展开查看详情
 }
 
 interface AIState {
@@ -50,6 +52,7 @@ interface AIState {
   addSearchLog: (log: Omit<SearchLog, 'id' | 'timestamp'>) => void;
   updateSearchLog: (id: string, updates: Partial<SearchLog>) => void;
   clearSearchLogs: () => void;
+  toggleSearchLogExpanded: (id: string) => void;
 
   // 状态
   setLoading: (loading: boolean) => void;
@@ -245,6 +248,15 @@ export const useAIStore = create<AIState>((set, get) => ({
   // 清空搜索日志
   clearSearchLogs: () => {
     set({ searchLogs: [] });
+  },
+
+  // 切换搜索日志展开状态
+  toggleSearchLogExpanded: (id: string) => {
+    set((state) => ({
+      searchLogs: state.searchLogs.map((log) =>
+        log.id === id ? { ...log, expanded: !log.expanded } : log
+      ),
+    }));
   },
 
   // 设置加载状态
