@@ -32,13 +32,13 @@ export interface SearchSourceConfig {
 
 /**
  * 智谱AI Web Search API
- * 使用官方API进行真实网络搜索
+ * 使用官方API进行真实网络搜索（正确的调用格式）
  */
 async function searchZhipuAI(query: string, apiKey: string, options: SearchOptions = {}): Promise<SearchResult[]> {
   const maxResults = options.maxResults || 10;
 
   try {
-    const response = await fetch('https://open.bigmodel.cn/api/paas/v4/tools', {
+    const response = await fetch('https://open.bigmodel.cn/api/paas/v4/chat/completions', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -46,18 +46,24 @@ async function searchZhipuAI(query: string, apiKey: string, options: SearchOptio
       },
       body: JSON.stringify({
         model: 'glm-4-flash',
-        stream: false,
+        messages: [
+          {
+            role: 'user',
+            content: query,
+          },
+        ],
         tools: [
           {
             type: 'web_search',
             web_search: {
               enable: true,
-              search_query: query,
               search_result: true,
-              count: maxResults.toString(),
+              search_query: query,
+              count: maxResults,
             },
           },
         ],
+        stream: false,
       }),
     });
 
@@ -72,18 +78,35 @@ async function searchZhipuAI(query: string, apiKey: string, options: SearchOptio
     // 解析搜索结果
     const results: SearchResult[] = [];
 
-    // 检查是否有 tool_calls
-    if (data.choices && data.choices[0] && data.choices[0].message.tool_calls) {
-      for (const toolCall of data.choices[0].message.tool_calls) {
-        if (toolCall.type === 'web_search' && toolCall.web_search) {
-          const searchResults = toolCall.web_search.results || [];
-          for (const item of searchResults) {
-            results.push({
-              title: item.title || '',
-              url: item.media_url || item.url || '',
-              snippet: item.content || item.description || '',
-            });
+    // 检查响应中的tool_calls
+    if (data.choices && data.choices[0] && data.choices[0].message) {
+      const message = data.choices[0].message;
+
+      // 如果有tool_calls，提取搜索结果
+      if (message.tool_calls) {
+        for (const toolCall of message.tool_calls) {
+          if (toolCall.type === 'web_search' && toolCall.web_search && toolCall.web_search.results) {
+            const searchResults = toolCall.web_search.results;
+            for (const item of searchResults) {
+              results.push({
+                title: item.title || '',
+                url: item.media_url || item.url || '',
+                snippet: item.content || item.description || '',
+              });
+            }
           }
+        }
+      }
+
+      // 如果web_search直接在message中
+      else if (message.web_search && message.web_search.results) {
+        const searchResults = message.web_search.results;
+        for (const item of searchResults) {
+          results.push({
+            title: item.title || '',
+            url: item.media_url || item.url || '',
+            snippet: item.content || item.description || '',
+          });
         }
       }
     }
