@@ -75,18 +75,25 @@ async function searchZhipuAI(query: string, apiKey: string, options: SearchOptio
 
     const data = await response.json();
 
+    // 调试：打印完整响应
+    console.log('[ZhipuAI] 完整API响应:', JSON.stringify(data, null, 2));
+
     // 解析搜索结果
     const results: SearchResult[] = [];
 
     // 检查响应中的tool_calls
     if (data.choices && data.choices[0] && data.choices[0].message) {
       const message = data.choices[0].message;
+      console.log('[ZhipuAI] message内容:', JSON.stringify(message, null, 2));
 
       // 如果有tool_calls，提取搜索结果
-      if (message.tool_calls) {
+      if (message.tool_calls && message.tool_calls.length > 0) {
+        console.log('[ZhipuAI] 找到tool_calls:', message.tool_calls.length);
         for (const toolCall of message.tool_calls) {
+          console.log('[ZhipuAI] toolCall类型:', toolCall.type);
           if (toolCall.type === 'web_search' && toolCall.web_search && toolCall.web_search.results) {
             const searchResults = toolCall.web_search.results;
+            console.log('[ZhipuAI] 搜索结果数量:', searchResults.length);
             for (const item of searchResults) {
               results.push({
                 title: item.title || '',
@@ -101,6 +108,7 @@ async function searchZhipuAI(query: string, apiKey: string, options: SearchOptio
       // 如果web_search直接在message中
       else if (message.web_search && message.web_search.results) {
         const searchResults = message.web_search.results;
+        console.log('[ZhipuAI] 直接web_search结果数量:', searchResults.length);
         for (const item of searchResults) {
           results.push({
             title: item.title || '',
@@ -108,6 +116,11 @@ async function searchZhipuAI(query: string, apiKey: string, options: SearchOptio
             snippet: item.content || item.description || '',
           });
         }
+      }
+
+      // 检查content字段（有些情况下结果在这里）
+      else if (message.content) {
+        console.log('[ZhipuAI] message.content存在，尝试解析搜索结果');
       }
     }
 
